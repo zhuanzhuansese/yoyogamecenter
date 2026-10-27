@@ -1,0 +1,5 @@
+{
+  "endpoint": "https://api.deepseek.com",
+  "key": "sk-d2c2b08e9cde45a085424cd5b77d50aa",
+  "model": "deepseek-v4-flash"
+}

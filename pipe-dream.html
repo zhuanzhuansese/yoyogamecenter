@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>接水管 · Pipe Dream</title>
+<style>
+:root{
+  --bg:#0B111A; --panel:#121B28; --bd:#22314A; --tx:#E6EDF7; --mu:#8497B4; --ac:#5AA9FF;
+  --cell:#131d2c; --cellbd:#22314a;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{
+  margin:0;background:radial-gradient(1200px 700px at 20% -10%,#14243a 0%,var(--bg) 55%) fixed;
+  color:var(--tx);
+  font:14px/1.5 -apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
+  overflow-x:hidden;
+}
+.wrap{max-width:760px;margin:0 auto;padding:14px 16px 24px;display:flex;flex-direction:column;gap:12px}
+header{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.brand{display:flex;align-items:baseline;gap:10px}
+.brand h1{margin:0;font-size:19px;font-weight:800;letter-spacing:.5px}
+.brand span{color:var(--mu);font-size:11px;letter-spacing:1.5px;text-transform:uppercase}
+.stats{display:flex;gap:8px;flex-wrap:wrap;margin-left:auto}
+.stat{background:var(--panel);border:1px solid var(--bd);border-radius:9px;padding:4px 11px;display:flex;align-items:center;gap:6px;font-variant-numeric:tabular-nums}
+.stat i{font-style:normal;color:var(--mu);font-size:11.5px}
+.stat b{font-size:14.5px;font-weight:700}
+.stat .lives{color:#ff7d7d}
+.tools{display:flex;gap:8px}
+button.tool{background:var(--panel);color:var(--tx);border:1px solid var(--bd);border-radius:9px;padding:6px 13px;font-size:13px;cursor:pointer;font-family:inherit;transition:.15s}
+button.tool:hover{border-color:var(--ac);color:#fff;background:#17253a}
+button.tool.on{border-color:var(--ac);background:#16304e;color:#cfe4ff}
+button.tool:active{transform:translateY(1px)}
+
+/* ---------- board ---------- */
+.board{position:relative;background:var(--panel2);border:1px solid var(--bd);border-radius:14px;padding:10px}
+#grid{
+  display:grid;grid-template-columns:repeat(9,1fr);gap:5px;
+  width:min(92vw,640px);margin:0 auto;
+}
+.cell{
+  position:relative;aspect-ratio:1;background:var(--cell);border:1px solid var(--cellbd);
+  border-radius:8px;cursor:pointer;display:grid;place-items:center;
+  transition:background .12s,border-color .12s;
+  touch-action:manipulation;user-select:none;
+}
+.cell:active{background:#1a2940}
+.cell svg{display:block;width:100%;height:100%;pointer-events:none}
+.cell.wet{background:#0e1c30;border-color:#1d6fc2;animation:wetIn .45s}
+.cell.leak{background:#3a1520;border-color:#e24b4a;animation:leakShake .35s}
+.cell.source{border-left:2px solid #38BDF8}
+@keyframes wetIn{0%{box-shadow:inset 0 0 0 0 rgba(83,166,255,0);transform:scale(1)}45%{box-shadow:inset 0 0 14px 3px rgba(83,166,255,.75);transform:scale(1.07)}100%{box-shadow:inset 0 0 0 0 rgba(83,166,255,0);transform:scale(1)}}
+@keyframes headPulse{0%,100%{box-shadow:inset 0 0 0 2px #7fd1ff}50%{box-shadow:inset 0 0 0 4px #4aa8ff,0 0 12px #4aa8ff}}
+@keyframes leakShake{0%,100%{transform:translateX(0)}25%{transform:translateX(-3px)}75%{transform:translateX(3px)}}
+/* 已通水的管子内部加「流动」高光，营造流水感 */
+.cell.wet svg .flow{stroke:#bff0ff;stroke-width:11;fill:none;stroke-linecap:round;stroke-dasharray:14 16;animation:flow .65s linear infinite}
+@keyframes flow{to{stroke-dashoffset:-30}}
+
+/* ---------- 状态条 / 水头 / 进水口 ---------- */
+.status{text-align:center;font-size:14.5px;font-weight:700;color:#FFD166;min-height:22px}
+.countdown{display:flex;flex-direction:column;align-items:center;gap:2px;margin:2px 0 4px;user-select:none}
+.countdown.hidden{display:none}
+.countdown .cdNum{
+  font-size:52px;font-weight:800;line-height:1;color:#7FD1FF;font-variant-numeric:tabular-nums;
+  width:92px;height:92px;border-radius:50%;display:grid;place-items:center;
+  background:radial-gradient(circle at 50% 40%,#15324c,#0d1d2e);
+  border:3px solid #2c5d6b;box-shadow:0 0 26px -4px #38BDF8,inset 0 0 18px -6px #38BDF8;
+  animation:cdPulse 1s ease-in-out infinite;
+}
+.countdown .cdTxt{font-size:13px;color:#8497B4;letter-spacing:2px}
+@keyframes cdPulse{0%,100%{transform:scale(1);border-color:#2c5d6b}50%{transform:scale(1.06);border-color:#38BDF8}}
+#waterHead{
+  position:absolute;width:34px;height:34px;margin:-17px 0 0 -17px;border-radius:50%;z-index:6;
+  background:radial-gradient(circle,rgba(143,227,255,.55) 0%,rgba(56,189,248,.28) 45%,rgba(56,189,248,0) 72%);
+  box-shadow:0 0 24px 10px rgba(56,189,248,.35);
+  pointer-events:none;opacity:0;transition:left .6s linear,top .6s linear;
+}
+#inlet{position:absolute;transform:translateY(-50%);display:none;align-items:center;gap:2px;pointer-events:none;z-index:6;white-space:nowrap}
+#inlet .d{font-size:16px;animation:bob 1.1s ease-in-out infinite}
+#inlet .t{font-size:11px;color:#7fd1ff;font-weight:700}
+#inlet .a{color:#7fd1ff;font-size:13px;font-weight:700;animation:arrPulse 1s ease-in-out infinite}
+@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+@keyframes arrPulse{0%,100%{opacity:.5}50%{opacity:1}}
+
+/* ---------- queue ---------- */
+.queue{display:flex;align-items:center;gap:12px;justify-content:center;flex-wrap:wrap}
+.queue .lbl{color:var(--mu);font-size:13px}
+.queue .pieces{display:flex;gap:8px;align-items:center}
+.qpiece{width:52px;height:52px;background:var(--panel2);border:1px solid var(--bd);border-radius:9px;display:grid;place-items:center;padding:5px;cursor:pointer;transition:border-color .15s,transform .15s,background .15s}
+.qpiece svg{width:100%;height:100%;pointer-events:none}
+.qpiece:hover{border-color:var(--ac)}
+.qpiece.cur{border-color:var(--ac);background:#16304e}
+.qpiece.sel{border-color:#7FD1FF;background:#1c3452;transform:translateY(-4px);box-shadow:0 0 12px -4px #7FD1FF}
+.cell.target{border-color:#2FBF9B;background:#0e2a24}
+.cell.target .targetIco{font-size:20px;line-height:1;animation:bob 1.2s ease-in-out infinite;pointer-events:none}
+.hint{color:var(--mu);font-size:12.5px;text-align:center}
+
+/* ---------- overlay ---------- */
+.overlay{position:fixed;inset:0;background:rgba(6,10,16,.6);display:grid;place-items:center;z-index:80;backdrop-filter:blur(3px)}
+.overlay.hidden{display:none}
+.card{background:linear-gradient(160deg,#152234,#0e1826);border:1px solid #2c405c;border-radius:18px;padding:26px 30px;text-align:center;max-width:440px;animation:pop .35s}
+.card h2{margin:0 0 6px;font-size:24px}
+.card .sub{color:var(--mu);font-size:13px;margin-bottom:14px}
+.card .big{font-size:44px;font-weight:800;color:#7FD1FF;line-height:1;font-variant-numeric:tabular-nums}
+.card .rows{display:flex;gap:18px;justify-content:center;margin:16px 0 20px;font-size:13px;color:var(--mu)}
+.card .rows b{display:block;color:var(--tx);font-size:18px;font-weight:700;font-variant-numeric:tabular-nums}
+.card .btns{display:flex;gap:10px;justify-content:center}
+.card .btns button{background:var(--panel);color:var(--tx);border:1px solid var(--bd);border-radius:10px;padding:9px 20px;font:inherit;font-size:14px;cursor:pointer}
+.card .btns button.pri{background:#1c3f66;border-color:#3d6d9e;color:#fff}
+.card .btns button:hover{border-color:var(--ac)}
+@keyframes pop{from{transform:scale(.85);opacity:0}to{transform:scale(1);opacity:1}}
+
+@media (max-width:560px){
+  #grid{gap:3px}
+  .qpiece{width:44px;height:44px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand"><h1>💧 接水管</h1><span>Pipe Dream</span></div>
+    <div class="stats">
+      <div class="stat"><i>得分</i><b id="sScore">0</b></div>
+      <div class="stat"><i>等级</i><b id="sLevel">1</b></div>
+      <div class="stat"><i>生命</i><b id="sLives" class="lives">❤❤❤</b></div>
+      <div class="stat"><i>最佳</i><b id="sBest">0</b></div>
+    </div>
+    <div class="tools">
+      <a class="tool" href="index.html" style="text-decoration:none;display:inline-block">🏠 主页</a>
+      <button class="tool" id="btnSound">音效：开</button>
+      <button class="tool" id="btnRestart">重来</button>
+    </div>
+  </header>
+
+  <div class="status" id="status">⏳ 准备中…</div>
+  <div class="countdown hidden" id="countdown">
+    <span class="cdNum" id="cdNum">20</span>
+    <span class="cdTxt">秒后出水</span>
+  </div>
+
+  <div class="board" id="board">
+    <div id="grid"></div>
+    <div id="waterHead"></div>
+    <div id="inlet"><span class="d">💧</span><span class="t">入口</span><span class="a">➜</span></div>
+  </div>
+
+  <div class="queue">
+    <span class="lbl">下一块：</span>
+    <div class="pieces" id="queue"></div>
+  </div>
+  <div class="hint">先点下面一块管道选中，再点格子放下；把水从 💧 引到 🚰（每关越来越难）</div>
+</div>
+
+<div class="overlay hidden" id="overlay">
+  <div class="card">
+    <h2>💦 水流出来了！</h2>
+    <div class="sub">水位上涨，游戏结束</div>
+    <div class="big" id="oScore">0</div>
+    <div class="rows">
+      <div>等级<b id="oLevel">1</b></div>
+      <div>最佳<b id="oBest">0</b></div>
+    </div>
+    <div class="btns">
+      <button class="pri" id="btnAgain">再玩一次</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* =========================================================================
+   经典《接水管 / Pipe Dream》：水流从左边进来，抢在水流到之前铺好管道。
+   6 种管件（直管×2 + 弯管×4），点空格子放下「当前管件」，水流每过一格 +10 分，
+   流到空格子/不通的管子就漏水扣一条命，漏满 3 次游戏结束，速度随等级加快。
+   ========================================================================= */
+const NS = 'http://www.w3.org/2000/svg';
+const COLS = 9, ROWS = 7;
+const PIECES = {
+  h:  { dirs: ['left', 'right'], d: 'M 0 50 L 100 50' },
+  v:  { dirs: ['up', 'down'],    d: 'M 50 0 L 50 100' },
+  ur: { dirs: ['up', 'right'],   d: 'M 50 0 L 50 50 L 100 50' },
+  dr: { dirs: ['down', 'right'], d: 'M 50 100 L 50 50 L 100 50' },
+  dl: { dirs: ['down', 'left'],  d: 'M 50 100 L 50 50 L 0 50' },
+  ul: { dirs: ['up', 'left'],    d: 'M 50 0 L 50 50 L 0 50' },
+};
+const TYPES = Object.keys(PIECES);
+const OPP = { up: 'down', down: 'up', left: 'right', right: 'left' };
+// 每种管件的「绘制起点」所在的那一侧（用于判断流动方向是否顺着绘制方向）
+const A_SIDE = { h: 'left', v: 'up', ur: 'up', dr: 'down', dl: 'down', ul: 'up' };
+const $ = id => document.getElementById(id);
+
+let grid, queue, water, wetSet;
+let score = 0, lives = 3, level = 1, tick = 900;
+let state = 'idle';          // idle | ready | running | leaking | clear | over
+let timer = null, readyTimer = null;
+let countdownTimer = null, countdownLeft = 10, headInit = true;
+let cellEls = [];
+let soundOn = true, best = 0;
+let aRow = 3;                 // 本关进水口所在行（A）
+let target = { c: 4, r: 3 };  // 本关出水口（B）
+let selectedIdx = null;       // 从下面队列选中的管件下标
+
+// 关卡：A（进水口）→ B（出水口），距离/速度随关卡递增
+function levelConfig(lv) {
+  const cfg = [
+    { aRow: 3, b: { c: 4, r: 3 } },   // 第1关：5 格直线
+    { aRow: 3, b: { c: 8, r: 3 } },   // 第2关：A→B 横穿到底
+    { aRow: 1, b: { c: 8, r: 5 } },   // 第3关：斜穿
+    { aRow: 5, b: { c: 8, r: 1 } },   // 第4关：斜穿（反向）
+    { aRow: 3, b: { c: 6, r: 0 } },   // 第5关：拐到上边
+    { aRow: 0, b: { c: 8, r: 6 } },   // 第6关：左上到右下
+  ][Math.min(lv - 1, 5)] || { aRow: 3, b: { c: 8, r: 0 } };
+  return { ...cfg, tick: Math.max(320, 900 - (lv - 1) * 60), countdown: Math.max(10, 20 - (lv - 1) * 2) };
+}
+
+function shuffle(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+// 取一个不在 exclude 里的管件类型（保证下面 4 个方块各不相同）
+function newPiece(exclude) {
+  let pool = TYPES;
+  if (exclude && exclude.length) {
+    const ex = new Set(exclude);
+    pool = TYPES.filter(t => !ex.has(t));
+    if (!pool.length) pool = TYPES;
+  }
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+function key(c, r) { return c + ',' + r; }
+
+/* ---------------- SVG 管件 ---------------- */
+function pipeSVG(type, wet, flowDir) {
+  const sv = document.createElementNS(NS, 'svg');
+  sv.setAttribute('viewBox', '0 0 100 100');
+  const mk = (w, color) => {
+    const p = document.createElementNS(NS, 'path');
+    p.setAttribute('d', PIECES[type].d);
+    p.setAttribute('fill', 'none');
+    p.setAttribute('stroke', color);
+    p.setAttribute('stroke-width', w);
+    p.setAttribute('stroke-linecap', 'butt');
+    p.setAttribute('stroke-linejoin', 'round');
+    return p;
+  };
+  sv.appendChild(mk(34, wet ? '#1d6fc2' : '#31415a'));
+  sv.appendChild(mk(20, wet ? '#53a6ff' : '#55708c'));
+  if (wet) {
+    const fl = document.createElementNS(NS, 'path');
+    fl.setAttribute('d', PIECES[type].d);
+    fl.setAttribute('fill', 'none');
+    fl.setAttribute('class', 'flow');
+    fl.setAttribute('stroke-linecap', 'round');
+    fl.setAttribute('stroke-linejoin', 'round');
+    if (flowDir === 'reverse') fl.style.animationDirection = 'reverse';
+    sv.appendChild(fl);
+  }
+  return sv;
+}
+
+/* ---------------- 棋盘 ---------------- */
+function buildBoard() {
+  const g = $('grid');
+  g.innerHTML = '';
+  cellEls = Array.from({ length: COLS }, () => Array(ROWS));
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      cell.dataset.c = c; cell.dataset.r = r;
+      cell.addEventListener('pointerdown', ev => { ev.preventDefault(); placePipe(c, r); });
+      g.appendChild(cell);
+      cellEls[c][r] = cell;
+    }
+  }
+}
+function renderCell(c, r, flowDir) {
+  const cell = cellEls[c][r];
+  cell.innerHTML = '';
+  const t = grid[c][r];
+  if (t) cell.appendChild(pipeSVG(t, wetSet.has(key(c, r)), flowDir));
+  cell.classList.toggle('wet', wetSet.has(key(c, r)));
+}
+function moveHead(c, r) {
+  const head = $('waterHead');
+  if (c < 0 || c >= COLS || r < 0 || r >= ROWS) { head.style.opacity = '0'; return; }
+  const cell = cellEls[c][r], board = $('board');
+  const br = board.getBoundingClientRect(), cr = cell.getBoundingClientRect();
+  head.style.transitionDuration = headInit ? '0ms' : (tick * 0.9) + 'ms';
+  headInit = false;
+  head.style.opacity = '1';
+  head.style.left = (cr.left - br.left + cr.width / 2) + 'px';
+  head.style.top = (cr.top - br.top + cr.height / 2) + 'px';
+}
+function hideWaterHead() {
+  $('waterHead').style.opacity = '0';
+  headInit = true;
+}
+function setStatus(txt) { $('status').textContent = txt; }
+
+/* 标出进水口：源格左侧加「💧入口➜」，蓝色左边框 */
+function markSource() {
+  const sc = cellEls[0][aRow];
+  sc.classList.add('source');
+  const board = $('board');
+  const br = board.getBoundingClientRect();
+  const cr = sc.getBoundingClientRect();
+  const inlet = $('inlet');
+  inlet.style.top = (cr.top - br.top + cr.height / 2) + 'px';
+  inlet.style.left = (cr.left - br.left + 5) + 'px';
+  inlet.style.display = 'flex';
+}
+function showCountdown() { const cd = $('countdown'); cd.classList.remove('hidden'); $('cdNum').textContent = countdownLeft; }
+function hideCountdown() { $('countdown').classList.add('hidden'); }
+function startCountdown(sec) {
+  countdownLeft = sec;
+  showCountdown();
+  setStatus('💧 快铺管道，把水从「💧入口」引到「🚰出口」！');
+  countdownTimer = setInterval(() => {
+    countdownLeft--;
+    if (countdownLeft <= 0) {
+      clearInterval(countdownTimer);
+      hideCountdown();
+      startWater();
+    } else {
+      $('cdNum').textContent = countdownLeft;
+    }
+  }, 1000);
+}
+
+/* ---------------- 队列 ---------------- */
+function renderQueue() {
+  const box = $('queue');
+  box.innerHTML = '';
+  const n = Math.min(4, queue.length);
+  for (let i = 0; i < n; i++) {
+    const d = document.createElement('div');
+    d.className = 'qpiece' + (selectedIdx === i ? ' sel' : (selectedIdx == null && i === 0 ? ' cur' : ''));
+    d.appendChild(pipeSVG(queue[i], false));
+    d.addEventListener('pointerdown', ev => { ev.preventDefault(); selectPiece(i); });
+    box.appendChild(d);
+  }
+}
+function selectPiece(i) {
+  selectedIdx = (selectedIdx === i) ? null : i;
+  renderQueue();
+}
+
+/* ---------------- 放置 ---------------- */
+function placePipe(c, r) {
+  if (state === 'over' || state === 'idle') return;
+  if (c === target.c && r === target.r) return;   // 出水口不能放管
+  if (grid[c][r]) return;                          // 已有管道
+  const idx = selectedIdx == null ? 0 : selectedIdx;
+  const type = queue.splice(idx, 1)[0];
+  queue.push(newPiece(queue));   // 新块与剩下的 3 块各不相同
+  selectedIdx = null;
+  grid[c][r] = type;
+  renderCell(c, r);
+  renderQueue();
+  sfx('place');
+}
+
+/* ---------------- 水流 ---------------- */
+function startWater() {
+  if (state !== 'ready') return;
+  state = 'running';
+  hideCountdown();
+  setStatus('💧 水流进来了！快铺管道');
+  water = { c: -1, r: aRow, from: 'right' };
+  // 水头先出现在进水口（源格），带过渡地流进第一格
+  const sc = cellEls[0][aRow], board = $('board');
+  const br = board.getBoundingClientRect(), cr = sc.getBoundingClientRect();
+  const head = $('waterHead');
+  head.style.transitionDuration = '0ms';
+  head.style.opacity = '1';
+  head.style.left = (cr.left - br.left - 3) + 'px';
+  head.style.top = (cr.top - br.top + cr.height / 2) + 'px';
+  headInit = false;
+  timer = setInterval(tickWater, tick);
+}
+function tickWater() {
+  if (state !== 'running') return;
+  let nc, nr, enterFrom;
+  if (water.c < 0) {
+    nc = 0; nr = aRow; enterFrom = 'left';
+  } else {
+    const t = grid[water.c][water.r];
+    if (!t || !PIECES[t].dirs.includes(water.from)) { leak(water.c, water.r); return; }
+    const out = PIECES[t].dirs.find(d => d !== water.from);
+    nc = water.c + (out === 'right' ? 1 : out === 'left' ? -1 : 0);
+    nr = water.r + (out === 'down' ? 1 : out === 'up' ? -1 : 0);
+    enterFrom = OPP[out];
+  }
+  if (nc < 0 || nc >= COLS || nr < 0 || nr >= ROWS) { leak(nc, nr); return; }
+
+  // 到达出水口 B：过关（B 是敞开的出水口，不用管道）
+  if (nc === target.c && nr === target.r) {
+    water.c = nc; water.r = nr; water.from = enterFrom;
+    const k = key(nc, nr);
+    if (!wetSet.has(k)) { wetSet.add(k); score += 10; }
+    moveHead(nc, nr);
+    updateHUD();
+    levelComplete();
+    return;
+  }
+
+  const t2 = grid[nc][nr];
+  if (!t2 || !PIECES[t2].dirs.includes(enterFrom)) { leak(nc, nr); return; }
+
+  water.c = nc; water.r = nr; water.from = enterFrom;
+  const k = key(nc, nr);
+  if (!wetSet.has(k)) { wetSet.add(k); score += 10; }
+  const flowDir = (enterFrom === A_SIDE[t2]) ? 'normal' : 'reverse';
+  renderCell(nc, nr, flowDir);
+  moveHead(nc, nr);
+  updateHUD();
+}
+function leak(c, r) {
+  state = 'leaking';
+  clearInterval(timer);
+  lives--;
+  sfx('leak');
+  setStatus(lives > 0 ? '💦 漏了！还剩 ' + lives + ' 条命' : '💦 全漏完了…');
+  if (c >= 0 && c < COLS && r >= 0 && r < ROWS) {
+    const cell = cellEls[c][r];
+    cell.classList.add('leak');
+    setTimeout(() => cell.classList.remove('leak'), 400);
+  }
+  hideWaterHead();
+  updateHUD();
+  if (lives <= 0) {
+    setTimeout(gameOver, 600);
+  } else {
+    setTimeout(() => {
+      water = { c: -1, r: aRow, from: 'right' };
+      setStatus('💧 水流又进来了，快铺管道');
+      // 水头回到进水口
+      const sc = cellEls[0][aRow], board = $('board');
+      const br = board.getBoundingClientRect(), cr = sc.getBoundingClientRect();
+      const head = $('waterHead');
+      head.style.transitionDuration = '0ms';
+      head.style.opacity = '1';
+      head.style.left = (cr.left - br.left - 3) + 'px';
+      head.style.top = (cr.top - br.top + cr.height / 2) + 'px';
+      headInit = false;
+      state = 'running';
+      timer = setInterval(tickWater, tick);
+    }, 1200);
+  }
+}
+
+/* ---------------- HUD ---------------- */
+function updateHUD() {
+  $('sScore').textContent = score;
+  $('sLevel').textContent = level;
+  $('sLives').textContent = '❤'.repeat(Math.max(0, lives)) + '🖤'.repeat(Math.max(0, 3 - lives));
+  $('sBest').textContent = best;
+}
+
+/* ---------------- 声音 ---------------- */
+let ac = null;
+function sfx(kind) {
+  if (!soundOn) return;
+  try {
+    ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+    if (ac.state === 'suspended') ac.resume();
+    const t = ac.currentTime;
+    const tone = (f, d, dur, type, vol) => {
+      const o = ac.createOscillator(), g = ac.createGain();
+      o.type = type; o.frequency.setValueAtTime(f, t + d);
+      g.gain.setValueAtTime(.0001, t + d);
+      g.gain.exponentialRampToValueAtTime(vol, t + d + .01);
+      g.gain.exponentialRampToValueAtTime(.0001, t + d + dur);
+      o.connect(g); g.connect(ac.destination); o.start(t + d); o.stop(t + d + dur + .03);
+    };
+    if (kind === 'place') tone(520, 0, .08, 'sine', .08);
+    else if (kind === 'level') { tone(660, 0, .1, 'sine', .1); tone(880, .08, .14, 'sine', .09); }
+    else if (kind === 'leak') { tone(300, 0, .28, 'sawtooth', .07); tone(190, .1, .3, 'sawtooth', .06); }
+  } catch (e) { }
+}
+
+/* ---------------- 游戏结束 ---------------- */
+function gameOver() {
+  state = 'over';
+  clearInterval(timer);
+  clearTimeout(readyTimer);
+  clearInterval(countdownTimer);
+  hideCountdown();
+  setStatus('💦 游戏结束');
+  if (score > best) { best = score; try { localStorage.setItem('pipe-best', String(best)); } catch (e) { } }
+  $('oScore').textContent = score;
+  $('oLevel').textContent = level;
+  $('oBest').textContent = best;
+  $('overlay').classList.remove('hidden');
+}
+
+/* ---------------- 关卡 ---------------- */
+function startLevel(lv) {
+  level = lv;
+  const cfg = levelConfig(lv);
+  aRow = cfg.aRow;
+  target = cfg.b;
+  tick = cfg.tick;
+  grid = Array.from({ length: COLS }, () => Array(ROWS).fill(null));
+  wetSet = new Set();
+  // 下面 4 个可选管件各不相同
+  queue = shuffle(TYPES).slice(0, 4);
+  selectedIdx = null;
+  water = null; state = 'ready';
+  buildBoard();
+  renderQueue();
+  markSource();
+  markTarget();
+  hideWaterHead();
+  updateHUD();
+  startCountdown(cfg.countdown);
+}
+function markTarget() {
+  cellEls.forEach(col => col.forEach(cell => cell.classList.remove('target')));
+  const tc = cellEls[target.c][target.r];
+  tc.classList.add('target');
+  const ico = document.createElement('span');
+  ico.className = 'targetIco';
+  ico.textContent = '🚰';
+  tc.appendChild(ico);
+}
+function levelComplete() {
+  state = 'clear';
+  clearInterval(timer);
+  sfx('level');
+  score += 100;   // 过关奖励
+  setStatus('🎉 第 ' + level + ' 关过了！水从 💧 流到了 🚰');
+  hideWaterHead();
+  updateHUD();
+  setTimeout(() => startLevel(level + 1), 1600);
+}
+
+/* ---------------- 重置 ---------------- */
+function reset() {
+  clearInterval(timer); clearTimeout(readyTimer); clearInterval(countdownTimer);
+  score = 0; lives = 3;
+  best = parseInt(localStorage.getItem('pipe-best') || '0', 10) || 0;
+  $('overlay').classList.add('hidden');
+  startLevel(1);
+}
+
+/* ---------------- 事件 ---------------- */
+$('btnRestart').addEventListener('click', reset);
+$('btnAgain').addEventListener('click', reset);
+$('btnSound').addEventListener('click', () => {
+  soundOn = !soundOn;
+  $('btnSound').textContent = '音效：' + (soundOn ? '开' : '关');
+  $('btnSound').classList.toggle('on', !soundOn);
+  if (soundOn) sfx('level');
+});
+
+reset();
+</script>
+</body>
+</html>

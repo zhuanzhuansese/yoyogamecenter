@@ -1,0 +1,1792 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<title>天空滚球 · 佑佑的游戏屋</title>
+<style>
+:root{ --mc:#3B82F6; --ink:#1F2937; --mu:#6B7280; }
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;margin:0;overflow:hidden;background:#BFD9FF}
+body{color:var(--ink);user-select:none;-webkit-user-select:none;touch-action:none;
+  font:16px/1.5 -apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif}
+button{font:inherit;cursor:pointer}
+#cv{position:fixed;inset:0;width:100vw;height:100vh;height:100dvh;display:block}
+
+#hud{position:fixed;left:0;right:0;top:0;display:flex;align-items:flex-start;gap:10px;padding:calc(10px + env(safe-area-inset-top)) 12px 0;pointer-events:none}
+#hud .l{display:flex;gap:8px;pointer-events:auto}
+.hb{border:0;border-radius:14px;background:rgba(255,255,255,.85);color:#334155;font-size:20px;font-weight:800;padding:6px 12px;text-decoration:none;box-shadow:0 4px 14px -6px rgba(0,0,0,.3)}
+#wx:empty{display:none}
+#target{margin:0 auto;display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.92);border-radius:20px;padding:6px 18px 6px 14px;box-shadow:0 6px 20px -8px rgba(0,0,0,.35);border-bottom:5px solid var(--mc)}
+#tLabel{font-size:15px;font-weight:800;color:var(--mu);line-height:1.2;text-align:center}
+#tBig{font-size:40px;font-weight:900;color:var(--mc);line-height:1.1;min-width:44px;text-align:center}
+#tBig ruby{font-family:"Kaiti SC","STKaiti","KaiTi",serif} #tBig rt{font:800 14px system-ui,sans-serif;color:#475569}
+#hearts{font-size:22px;letter-spacing:1px;white-space:nowrap;background:rgba(255,255,255,.85);border-radius:14px;padding:4px 10px;box-shadow:0 4px 14px -6px rgba(0,0,0,.3)}
+#slots{position:fixed;left:50%;transform:translateX(-50%);top:calc(84px + env(safe-area-inset-top));display:flex;gap:5px;pointer-events:none}
+#slots span{width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,.55);border:2px dashed rgba(255,255,255,.95);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:900;color:var(--mc)}
+#slots span.on{background:#fff;border:2px solid var(--mc);animation:pop .35s}
+@keyframes pop{0%{transform:scale(.3)}70%{transform:scale(1.25)}100%{transform:scale(1)}}
+#toast{position:fixed;left:50%;top:calc(150px + env(safe-area-inset-top));transform:translate(-50%,0);font-size:26px;font-weight:900;color:#fff;text-align:center;
+  text-shadow:0 3px 0 rgba(0,0,0,.25),0 0 18px rgba(0,0,0,.25);pointer-events:none;opacity:0;transition:opacity .25s;white-space:nowrap}
+#toast.on{opacity:1}
+#toast.bad{color:#FFE4E6}
+#help{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom));transform:translateX(-50%);background:rgba(15,23,42,.55);color:#fff;border-radius:14px;padding:6px 14px;font-size:14px;font-weight:700;pointer-events:none;white-space:nowrap;transition:opacity .6s}
+#count{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;font-size:120px;font-weight:900;color:#fff;text-shadow:0 6px 0 var(--mc),0 0 30px rgba(0,0,0,.25);pointer-events:none}
+
+.screen{position:fixed;inset:0;z-index:20;display:flex;flex-direction:column;align-items:center;overflow:auto;padding:28px 18px 40px}
+.screen.off{display:none}
+#modes{background:linear-gradient(180deg,rgba(186,220,255,.96),rgba(255,228,240,.96))}
+#modes h2{margin:0;font-size:32px;font-weight:900;color:#1E3A8A}
+#modes .sub{margin:4px 0 14px;color:#475569;text-align:center}
+.mgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;width:100%;max-width:780px}
+.mcard{border:0;border-radius:20px;padding:12px 12px 10px;background:#fff;box-shadow:0 8px 24px -14px rgba(0,0,0,.35);display:flex;flex-direction:column;align-items:center;gap:6px;border-bottom:6px solid var(--c);transition:transform .12s}
+.mcard:hover{transform:translateY(-3px)}
+.mcard:active{transform:scale(.97)}
+.mcard .e{font-size:42px;line-height:1.1}
+.mcard .n{font-size:22px;font-weight:900;color:var(--c)}
+.mcard .x{font-size:13.5px;color:var(--mu);text-align:center}
+.mcard .b{font-size:13px;font-weight:800;color:var(--c)}
+.mcard{cursor:pointer;user-select:none}
+.mcard:focus-visible{outline:3px solid var(--c);outline-offset:2px}
+.mcard .lv{display:flex;align-items:center;gap:6px;font-size:14px;color:#334155}
+.mcard .lv b{min-width:48px;text-align:center}
+.lvb{border:0;width:30px;height:30px;border-radius:50%;background:#F1F5F9;color:var(--c);font-size:14px;font-weight:900;display:flex;align-items:center;justify-content:center;padding:0}
+.lvb:hover:not(:disabled){background:var(--c);color:#fff}
+.lvb:disabled{opacity:.3;cursor:default}
+.mcard .w{font-size:13px;font-weight:700;color:#B45309;min-height:20px}
+#modes .hb{margin-top:22px;font-size:16px}
+
+#modal{background:rgba(15,23,42,.5);justify-content:center}
+.toggles{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin:0 0 8px}
+.tg{border:0;border-radius:999px;padding:9px 18px;font-weight:800;font-size:16px;background:#fff;color:#475569;box-shadow:0 4px 14px -8px rgba(0,0,0,.4)}
+.tg.on{background:#1E3A8A;color:#fff}
+.tgnote{font-size:13.5px;color:#334155;text-align:center;min-height:20px;margin:0 0 16px;max-width:640px}
+#aiPanel{position:fixed;left:50%;bottom:calc(12px + env(safe-area-inset-bottom));transform:translateX(-50%);width:min(700px,94vw);z-index:5;
+  background:rgba(255,255,255,.96);border-radius:20px;padding:12px;box-shadow:0 12px 34px -12px rgba(0,0,0,.45);border-top:5px solid var(--mc);display:none;flex-direction:column;gap:8px}
+#aiPanel.on{display:flex}
+#aiQ{font-size:18px;font-weight:800;line-height:1.4}
+#aiRes{font-size:14.5px;font-weight:700;color:#64748B}
+#aiRes:empty{display:none}
+#aiRes.good{color:#15803D} #aiRes.bad{color:#DC2626}
+#aiBar{display:flex;gap:8px}
+#aiInput{flex:1;min-width:0;font:inherit;font-size:18px;padding:9px 12px;border:2px solid #E5EAF2;border-radius:14px;outline:none;user-select:text;-webkit-user-select:text}
+#aiInput:focus{border-color:var(--mc)}
+.ab{border:0;border-radius:14px;padding:10px 14px;font-weight:800;font-size:16px;white-space:nowrap}
+#aiSend{background:var(--mc);color:#fff}
+#aiMic{background:#22C55E;color:#fff;touch-action:none}
+#aiMic.on{background:#15803D}
+.ab:disabled,#aiInput:disabled{opacity:.5}
+#mbox{background:#fff;border-radius:24px;padding:24px 22px;max-width:520px;width:100%;text-align:center;box-shadow:0 20px 60px -20px rgba(0,0,0,.5)}
+#mbox h3{margin:0;font-size:32px;font-weight:900}
+#mbox p{margin:6px 0;color:var(--mu)}
+.chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin:14px 0 18px}
+.chips span{background:#F1F5F9;border-radius:12px;padding:5px 10px;font-weight:800}
+.wbtns{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+.wbtns button{border:0;border-radius:14px;padding:12px 20px;font-weight:800;font-size:17px}
+
+@media (max-width:560px){
+  #tBig{font-size:30px} #tLabel{font-size:13px} #hearts{font-size:16px;padding:4px 7px} .hb{font-size:17px;padding:5px 9px}
+  #slots{top:calc(72px + env(safe-area-inset-top))} #slots span{width:24px;height:24px;font-size:13px}
+  #toast{font-size:20px}
+}
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+
+<div id="hud">
+  <div class="l"><a class="hb" href="/" title="回游戏屋">🏠</a><button class="hb" id="pauseBtn" title="暂停">⏸</button><span class="hb" id="wx" title="今天的天气"></span></div>
+  <div id="target"><span id="tLabel">撞数字</span><span id="tBig">1</span></div>
+  <div id="hearts"></div>
+</div>
+<div id="slots"></div>
+<div id="toast"></div>
+<div id="help">按住屏幕左边 / 右边，或者左右拖动，让球去撞对的东西</div>
+<div id="count"></div>
+<div id="aiPanel">
+  <div id="aiQ">🤖 <span id="aiQText"></span></div>
+  <div id="aiRes"></div>
+  <div id="aiBar"><input id="aiInput" type="text" autocomplete="off" enterkeyhint="send" placeholder="接着话题说一句…">
+    <button class="ab" id="aiSend">发送</button><button class="ab" id="aiMic">🎤 按住 说话</button></div>
+</div>
+
+<div class="screen" id="modes">
+  <h2>⚽ 天空滚球</h2>
+  <div class="sub">小球在天空跑道上滚，左右控制它去撞对的东西！<br>撞对 10 个就到终点 🏁，别撞错，也别掉下去哦</div>
+  <div class="toggles"><button class="tg" id="tgAI"></button><button class="tg" id="tgFence"></button></div>
+  <div class="tgnote" id="tgNote"></div>
+  <div class="mgrid" id="mgrid"></div>
+  <a class="hb" href="/">🏠 回游戏屋</a>
+</div>
+<div class="screen off" id="modal"><div id="mbox"></div></div>
+
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+const GOAL = 10, MAX_HEARTS = 5;
+
+/* ============================ 题库 ============================ */
+const VEG = [['胡萝卜','🥕'],['西红柿','🍅'],['土豆','🥔'],['黄瓜','🥒'],['茄子','🍆'],['玉米','🌽'],['西兰花','🥦'],['白菜','🥬'],
+  ['南瓜','🎃'],['青椒','🫑'],['辣椒','🌶️'],['洋葱','🧅'],['大蒜','🧄'],['蘑菇','🍄'],['红薯','🍠'],['豌豆','🫛']];
+const FRUIT = [['苹果','🍎'],['青苹果','🍏'],['香蕉','🍌'],['西瓜','🍉'],['草莓','🍓'],['葡萄','🍇'],['橘子','🍊'],['柠檬','🍋'],
+  ['桃子','🍑'],['梨','🍐'],['芒果','🥭'],['菠萝','🍍'],['樱桃','🍒'],['蓝莓','🫐'],['猕猴桃','🥝'],['椰子','🥥'],['哈密瓜','🍈'],['牛油果','🥑']];
+const ANIMAL = [['小猫','🐱'],['小狗','🐶'],['老虎','🐯'],['狮子','🦁'],['大象','🐘'],['熊猫','🐼'],['兔子','🐰'],['小鱼','🐟'],
+  ['小鸟','🐦'],['小马','🐴'],['斑马','🦓'],['奶牛','🐮'],['小羊','🐑'],['猴子','🐵'],['长颈鹿','🦒'],['企鹅','🐧'],['恐龙','🦖'],
+  ['小鸡','🐤'],['鸭子','🦆'],['小猪','🐷'],['老鼠','🐭'],['狐狸','🦊'],['小熊','🐻'],['青蛙','🐸'],['蝴蝶','🦋'],['蜜蜂','🐝'],
+  ['海豚','🐬'],['鲸鱼','🐳'],['螃蟹','🦀'],['乌龟','🐢'],['章鱼','🐙'],['考拉','🐨'],['猫头鹰','🦉']];
+const VEHICLE = [['汽车','🚗'],['公交车','🚌'],['救护车','🚑'],['消防车','🚒'],['警车','🚓'],['出租车','🚕'],['拖拉机','🚜'],['自行车','🚲'],
+  ['摩托车','🏍️'],['卡车','🚚'],['直升机','🚁'],['飞机','✈️'],['火箭','🚀'],['轮船','🚢'],['帆船','⛵'],['火车','🚂'],['高铁','🚄'],['地铁','🚇'],['滑板车','🛴'],['电动车','🛵']];
+const CANDY = [['糖果','🍬'],['棒棒糖','🍭'],['巧克力','🍫'],['甜甜圈','🍩'],['饼干','🍪'],['纸杯蛋糕','🧁'],['蛋糕','🍰'],['生日蛋糕','🎂'],
+  ['冰淇淋','🍦'],['圣代','🍨'],['刨冰','🍧'],['布丁','🍮'],['派','🥧'],['华夫饼','🧇'],['松饼','🥞'],['月饼','🥮']];
+const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+/* 汉字：每关 10 个常见的象形 / 简单字，「字|拼音|组词|图」。轨道上只出现字本身，顶上卡片给拼音和图做提示 */
+const HANZI_STAGES = [
+  ['日|rì|太阳|☀️','月|yuè|月亮|🌙','山|shān|大山|⛰️','水|shuǐ|喝水|💧','火|huǒ|火苗|🔥','木|mù|树木|🌳','土|tǔ|泥土|🪴','石|shí|石头|🪨','田|tián|田地|🌾','雨|yǔ|下雨|🌧️'],
+  ['人|rén|大人|🧍','口|kǒu|张口|👄','手|shǒu|小手|✋','目|mù|目光|👁️','耳|ěr|耳朵|👂','足|zú|足球|⚽','头|tóu|头发|👦','心|xīn|爱心|❤️','牙|yá|牙齿|🦷','毛|máo|羽毛|🪶'],
+  ['大|dà|大象|🐘','小|xiǎo|大小|🤏','上|shàng|上面|⬆️','下|xià|下面|⬇️','中|zhōng|中间|🎯','马|mǎ|小马|🐴','牛|niú|奶牛|🐮','羊|yáng|小羊|🐑','鸟|niǎo|小鸟|🐦','鱼|yú|小鱼|🐟'],
+  ['一|yī|一个|1️⃣','二|èr|两个|2️⃣','三|sān|三个|3️⃣','十|shí|十个|🔟','花|huā|花朵|🌸','草|cǎo|小草|🌿','米|mǐ|大米|🍚','门|mén|大门|🚪','车|chē|汽车|🚗','天|tiān|天空|🌤️']
+].map(st => st.map(x => { const [c, py, w, pic] = x.split('|'); return { key:c, label:c, py, word:w, pic, cat:'汉字' }; }));
+// 长得像的字，当「撞错」的干扰项（认字最容易混的就是这些）
+const LOOKALIKE = { 日:'目白田旦', 月:'用目肉', 山:'出由川', 水:'木永小', 火:'人大灭', 木:'本禾水术', 土:'士王上工', 石:'右古口', 田:'由甲日申', 雨:'两而肉',
+  人:'入八大个', 口:'日中回', 手:'毛千午', 目:'日自且', 耳:'目牙且', 足:'走是定', 头:'买实大', 心:'必小', 牙:'才耳呀', 毛:'手千笔',
+  大:'太天犬人', 小:'少水尔', 上:'下土止', 下:'上不卜', 中:'申口虫', 马:'鸟与乌', 牛:'午生半', 羊:'半美洋', 鸟:'乌马岛', 鱼:'角色渔',
+  一:'二十三', 二:'三一工', 三:'二王川', 十:'千土干', 花:'化草苹', 草:'早花苹', 米:'来木光', 门:'们问闪', 车:'东年牛', 天:'大夫太' };
+const ALL_HANZI = HANZI_STAGES.flat();
+
+const word = (cat, [label, emoji]) => ({ key:label, label, emoji, cat });
+const MODES = [
+  { id:'number', name:'数字', emoji:'🔢', color:'#3B82F6', noun:'数字', seq:true,
+    stageAt:numberStage, stageName: s => s.name, ball:'pool', ballName:'🎱 台球（球上写着要找的数 / 算式）' },
+  { id:'alpha', name:'字母', emoji:'🔤', color:'#8B5CF6', noun:'字母', seq:true, en:true,
+    stages:[[0,10],[10,20],[16,26]].map(([a,b]) => LETTERS.slice(a, b).map(c => ({ key:c, label:c, cat:'字母' }))),
+    stageName: s => `${s[0].label} → ${s[s.length - 1].label}`, ball:'letters', world:'coaster', ballName:'🔠 字母球 · 🎢 过山车' },
+  { id:'hanzi', name:'汉字', emoji:'🀄', color:'#0D9488', noun:'汉字', seq:true, shuffle:true, stages:HANZI_STAGES,
+    stageName: s => s.slice(0, 5).map(i => i.label).join(' ') + ' …', ball:'hanzi', ballName:'🏮 田字格灯笼球' },
+  { id:'veg',    name:'蔬菜', emoji:'🥕', color:'#16A34A', noun:'蔬菜', items:VEG.map(x => word('蔬菜', x)), ball:'mouse', ballName:'🐭 小老鼠吃蔬菜' },
+  { id:'fruit',  name:'水果', emoji:'🍎', color:'#EF4444', noun:'水果', items:FRUIT.map(x => word('水果', x)), ball:'melon', ballName:'🍉 西瓜球' },
+  { id:'animal', name:'动物', emoji:'🐶', color:'#F59E0B', noun:'动物', items:ANIMAL.map(x => word('动物', x)), ball:'hedgehog', ballName:'🦔 刺猬球' },
+  { id:'candy',  name:'糖果', emoji:'🍭', color:'#EC4899', noun:'甜食', items:CANDY.map(x => word('甜食', x)), donut:true, ballName:'🍩 草莓巧克力甜甜圈球' },
+  { id:'train',  name:'火车', emoji:'🚂', color:'#C2410C', noun:'交通工具', items:VEHICLE.map(x => word('交通工具', x)), ball:'train', world:'rail', ballName:'🚂 小火车头 · 穿山跨海' },
+];
+const WORD_MODES = MODES.filter(m => m.items);
+const numItem = n => ({ key:String(n), label:String(n), cat:'数字' });
+const letterItem = c => ({ key:c, label:c, cat:'字母' });
+const hanziItem = c => ALL_HANZI.find(h => h.key === c) || { key:c, label:c, cat:'汉字' };
+
+const rand = n => Math.floor(Math.random() * n);
+const pick = a => a[rand(a.length)];
+const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--){ const j = rand(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+
+/* ============================ 声音 ============================ */
+let actx = null;
+function beep(freq, dur, type = 'sine', vol = 0.12, slideTo = 0, delay = 0){
+  try{
+    if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+    if (actx.state === 'suspended') actx.resume();
+    const t = actx.currentTime + delay, o = actx.createOscillator(), g = actx.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, t);
+    if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t + dur);
+    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(actx.destination); o.start(t); o.stop(t + dur);
+  }catch(e){}
+}
+// 提示音放完的时间点：后面的语音等它放完再开口，不叠在一起
+let sfxEnd = 0;
+const holdVoice = ms => { sfxEnd = Math.max(sfxEnd, performance.now() + ms); };
+const sfxGood = () => { beep(880, .12, 'triangle', .14); beep(1320, .2, 'triangle', .12, 0, .1); holdVoice(300); };
+const sfxBad  = () => { beep(300, .35, 'sawtooth', .09, 110); holdVoice(350); };
+const sfxFall = () => { beep(600, .8, 'sine', .12, 80); holdVoice(800); };
+const sfxWin  = () => { [523, 659, 784, 1047, 1319].forEach((f, i) => beep(f, .22, 'triangle', .12, 0, i * .11)); holdVoice(660); };
+// 环境音（打雷、隧道、汽笛、倒计时、咬东西、碰护栏）：正在说话时就不放，免得盖住题目
+const amb = (...a) => { if (!talking()) beep(...a); };
+
+let voices = [];
+const loadVoices = () => { try{ voices = speechSynthesis.getVoices(); }catch(e){} };
+if ('speechSynthesis' in window){ loadVoices(); speechSynthesis.onvoiceschanged = loadVoices; }
+function pickVoice(lang){
+  if (!voices.length) loadVoices();
+  const L = v => (v.lang || '').toLowerCase();
+  if (lang.startsWith('en')) return voices.find(v => L(v).startsWith('en-us')) || voices.find(v => L(v).startsWith('en')) || null;
+  const zh = v => /zh|cmn/.test(L(v)) && !/yue|zh[-_]hk/.test(L(v));
+  for (const k of ['meijia','xiaoxiao','xiaoyi','lili','huihui','tingting']){
+    const v = voices.find(v => zh(v) && (v.name || '').toLowerCase().replace(/[^a-z]/g, '').includes(k)); if (v) return v;
+  }
+  return voices.find(v => zh(v) && /zh[-_]cn|cmn|hans/.test(L(v))) || voices.find(zh) || null;
+}
+/* 语音自己排队：一次只交给浏览器一句，念完（onend）再念下一句。
+   不靠浏览器自带的队列 —— cancel 之后马上 speak，iPad 上会叠音或吞字。
+   talking() 告诉游戏「还在说话」：小球要等题目念完才滚到下一排，AI 对话也要等说完才能回答 */
+const tts = { q:[], cur:null, t:null };
+function talking(){ return !!(tts.cur || tts.q.length); }
+function stopSpeech(){
+  tts.q = []; tts.cur = null; clearTimeout(tts.t);
+  try{ speechSynthesis.cancel(); }catch(e){}
+}
+function speak(text, append, lang = 'zh-CN'){
+  if (!('speechSynthesis' in window)) return;
+  if (!append) stopSpeech();
+  tts.q.push({ text, lang });
+  if (!tts.cur) nextSpeech();
+}
+function nextSpeech(){
+  const item = tts.q.shift() || null;
+  tts.cur = item; clearTimeout(tts.t);
+  if (!item) return;
+  const done = () => { if (tts.cur === item) nextSpeech(); };   // 被 cancel 掉的旧句子回调进来时直接忽略
+  const go = () => {
+    if (tts.cur !== item) return;
+    try{
+      const u = item.u = new SpeechSynthesisUtterance(item.text);   // 挂在 item 上，防止 Chrome 把它回收掉、不触发 onend
+      u.lang = item.lang; u.rate = 0.95; u.pitch = 1.15;
+      const v = pickVoice(item.lang); if (v) u.voice = v;
+      u.onstart = () => { item.started = true; };
+      u.onend = u.onerror = done;
+      speechSynthesis.speak(u);
+    }catch(e){ done(); return; }
+    // 保底：浏览器不出声（没权限 / 没语音包）或者 onend 丢了，也不能把游戏卡住
+    tts.t = setTimeout(function check(){
+      if (tts.cur !== item) return;
+      if (!item.started && !speechSynthesis.speaking) return done();
+      if (performance.now() - t0 > 3000 + [...item.text].length * 400) return done();
+      tts.t = setTimeout(check, 500);
+    }, 2000);
+  };
+  const t0 = performance.now() + Math.max(0, sfxEnd - performance.now());
+  if (t0 > performance.now()) tts.t = setTimeout(go, t0 - performance.now()); else go();
+}
+const sayText = it => it.q ? `${it.a}加${it.b}等于${it.label}！` : it.cat === '汉字' ? `${it.label}，${it.word}的${it.label}！` : it.label;
+const sayItem = (it, append) => speak(sayText(it), append, it.cat === '字母' ? 'en-US' : 'zh-CN');
+
+/* ============================ 游戏状态 ============================ */
+const WIN_KEY = 'yy-skyball-wins';
+let wins = {};
+try{ wins = JSON.parse(localStorage.getItem(WIN_KEY) || '{}') || {}; }catch(e){}
+
+const game = { state:'menu', paused:false, mode:null, seq:null, got:[], hearts:MAX_HEARTS, misses:0, row:null, countT:0 };
+const ball = { x:0, vx:0, hop:0, hopV:0, phase:0, falling:false, fallT:0, inv:0 };
+let dist = 0, speed = 0, skyX = 0;
+
+/* 关卡：数字 11 关（数数 + 10~100 以内加法）、字母 3 关、汉字 4 关。
+   当前关卡存在 localStorage；没选过就按通关次数算（兼容以前的进度）。卡片上的 ◀ ▶ 可以手动换关 */
+const LEVEL_KEY = 'yy-skyball-level';
+let levels = {};
+try{ levels = JSON.parse(localStorage.getItem(LEVEL_KEY) || '{}') || {}; }catch(e){}
+const levelCount = m => m.stageAt ? 11 : m.stages ? m.stages.length : 0;
+function getLevel(m){
+  const n = levelCount(m);
+  const v = levels[m.id] != null ? levels[m.id] : m.stageAt ? (wins[m.id] || 0) : (wins[m.id] || 0) % n;
+  return Math.max(0, Math.min(n - 1, v));
+}
+function setLevel(m, v){
+  levels[m.id] = Math.max(0, Math.min(levelCount(m) - 1, v));
+  try{ localStorage.setItem(LEVEL_KEY, JSON.stringify(levels)); }catch(e){}
+}
+const stageOf = m => m.stageAt ? m.stageAt(getLevel(m)) : m.stages[getLevel(m)];
+/* 数字模式的关卡：第 1 关按顺序数 1→10；第 2 关起做加法，看到「2+2=?」就去撞 4。
+   第 2 关和不超过 10，第 3 关不超过 20……每升一关上限加 10（最多 100）。题目尽量出在上限附近，越往后越难 */
+function numberStage(level){
+  if (level <= 0){ const s = Array.from({ length:10 }, (_, i) => numItem(i + 1)); s.name = '1 → 10'; s.level = 1; return s; }
+  const max = Math.min(100, level * 10), lo = Math.max(2, Math.ceil(max * 0.4));
+  const out = [], seen = new Set();
+  for (let guard = 0; out.length < 10 && guard < 1000; guard++){
+    const c = lo + rand(max - lo + 1), a = 1 + rand(c - 1), b = c - a, q = `${a}+${b}`;
+    if (seen.has(q)) continue;
+    seen.add(q); out.push({ key:q, label:String(c), q, a, b, ans:c, cat:'数字' });
+  }
+  out.name = `${max} 以内加法`; out.level = level + 1;
+  return out;
+}
+function currentTarget(){
+  const m = game.mode;
+  if (m.seq) return game.seq[game.got.length];
+  const left = m.items.filter(it => !game.got.some(g => g.key === it.key));
+  return pick(left);
+}
+function distractors(target, n){
+  const m = game.mode, out = [];
+  const others = WORD_MODES.filter(w => w !== m).flatMap(w => w.items);
+  const used = new Set([target.key]);
+  const add = it => { if (it && !used.has(it.key)){ used.add(it.key); out.push(it); } };
+  if (m.seq){
+    // 先放一个「长得像 / 挨得近」的错数字（字母），再放一个别的种类
+    const t = target.key, tv = target.ans != null ? target.ans : +t;
+    const near = m.id === 'hanzi' ? [...(LOOKALIKE[t] || '')].map(hanziItem)
+      : m.id === 'number'
+      ? [-2, -1, 1, 2, 3].map(d => tv + d).filter(v => v > 0 && v !== tv).map(numItem)
+      : [-2, -1, 1, 2].map(d => LETTERS[LETTERS.indexOf(t) + d]).filter(Boolean).map(letterItem);
+    add(pick(near));
+    while (out.length < n){
+      const r = Math.random();
+      if (r < 0.4 || target.q) add(target.q && r > 0.6 ? numItem(Math.max(1, tv + (rand(2) ? 1 : -1) * (3 + rand(3)))) : pick(near));
+      else if (r < 0.7) add(m.id === 'hanzi' ? pick(game.seq) : m.id === 'number' ? letterItem(pick(LETTERS)) : numItem(1 + rand(20)));
+      else add(m.id === 'hanzi' ? pick(ALL_HANZI) : pick(others));
+    }
+  } else {
+    while (out.length < n) add(pick(others));
+  }
+  return out;
+}
+
+const LANES = [-0.62, 0, 0.62];
+function makeRow(z){
+  if (game.got.length >= GOAL) return { z, finish:true, items:[], born:performance.now() };
+  const target = currentTarget();
+  const n = game.got.length < 2 ? 1 : 2;   // 开头两排简单一点
+  const items = [target, ...distractors(target, n)];
+  const lanes = shuffle([0, 1, 2]);
+  const born = performance.now();
+  return { z, born, items: items.map((it, i) => ({ ...it, ok:i === 0, lane:LANES[lanes[i]], state:'idle', t:0, col:tokenColor(it.key) })) };
+}
+const TOKEN_COLS = ['#EF4444','#F97316','#EAB308','#22C55E','#06B6D4','#3B82F6','#8B5CF6','#EC4899'];
+function tokenColor(k){ let h = 0; for (const c of k) h = (h * 31 + c.charCodeAt(0)) >>> 0; return TOKEN_COLS[h % TOKEN_COLS.length]; }
+
+/* ============================ HUD ============================ */
+function updateHud(){
+  const m = game.mode; if (!m) return;
+  $('hearts').textContent = '❤️'.repeat(game.hearts) + '🤍'.repeat(MAX_HEARTS - game.hearts);
+  if (game.got.length >= GOAL){ $('tLabel').innerHTML = '冲向'; $('tBig').textContent = '🏁'; }
+  else if (m.id === 'hanzi'){ const t = game.seq[game.got.length]; $('tLabel').innerHTML = `找这个字<br>${t.pic} ${t.word}`; $('tBig').innerHTML = `<ruby>${t.label}<rt>${t.py}</rt></ruby>`; }
+  else if (m.seq && game.seq[game.got.length].q){ const t = game.seq[game.got.length]; $('tLabel').innerHTML = `算一算<br>撞答案`; $('tBig').innerHTML = `<span style="font-size:.85em;white-space:nowrap">${t.a}+${t.b}=?</span>`; }
+  else if (m.seq){ $('tLabel').innerHTML = `撞${m.noun}<br>下一个`; $('tBig').textContent = game.seq[game.got.length].label; }
+  else { $('tLabel').innerHTML = `只撞<br>${m.noun}`; $('tBig').textContent = m.emoji; }
+  $('slots').innerHTML = Array.from({ length:GOAL }, (_, i) => { const g = game.got[i]; return g ? `<span class="on">${g.emoji || g.label}</span>` : '<span></span>'; }).join('');
+}
+let toastT = null;
+function toast(msg, bad){
+  const t = $('toast'); t.textContent = msg; t.className = 'on' + (bad ? ' bad' : '');
+  clearTimeout(toastT); toastT = setTimeout(() => t.className = '', 1500);
+}
+
+function showModes(){
+  game.state = 'menu'; game.paused = false;
+  showAiPanel(false); renderToggles();
+  stopSpeech();
+  $('mgrid').innerHTML = MODES.map(m => {
+    const desc = m.id === 'number' ? (() => { const s = stageOf(m); return s.level === 1 ? '按顺序撞 1 → 10' : `算加法：${s.name}`; })() : m.id === 'hanzi' ? `认字：${m.stageName(stageOf(m))}` : m.seq ? `按顺序撞 ${m.stageName(stageOf(m))}` : `只撞${m.noun} ${m.items.slice(0, 3).map(i => i.emoji).join('')}，别撞别的`;
+    const n = levelCount(m), lv = n ? getLevel(m) : 0;
+    const lvRow = n ? `<span class="lv"><button class="lvb" data-d="-1" title="上一关" aria-label="上一关" ${lv <= 0 ? 'disabled' : ''}>◀</button>
+      <b>第 ${lv + 1} 关</b><button class="lvb" data-d="1" title="下一关" aria-label="下一关" ${lv >= n - 1 ? 'disabled' : ''}>▶</button></span>` : '';
+    return `<div class="mcard" role="button" tabindex="0" data-id="${m.id}" style="--c:${m.color}">
+      <span class="e">${m.emoji}</span><span class="n">${m.name}模式</span>${lvRow}
+      <span class="x">${desc}</span><span class="b">${m.ballName}</span><span class="w">${wins[m.id] ? '🏆 × ' + wins[m.id] : ''}</span></div>`;
+  }).join('');
+  $('modes').classList.remove('off'); $('modal').classList.add('off');
+}
+$('mgrid').addEventListener('click', e => {
+  const card = e.target.closest('.mcard'); if (!card) return;
+  const lvb = e.target.closest('.lvb');
+  if (lvb){   // 换关，不开始游戏
+    const m = MODES.find(x => x.id === card.dataset.id);
+    if (!lvb.disabled){ setLevel(m, getLevel(m) + +lvb.dataset.d); beep(660, .06, 'triangle', .06); showModes(); }
+    return;
+  }
+  startMode(card.dataset.id);
+});
+$('mgrid').addEventListener('keydown', e => { const card = e.target.closest('.mcard'); if (card && e.target === card && (e.key === 'Enter' || e.key === ' ')){ e.preventDefault(); startMode(card.dataset.id); } });
+
+function startMode(id){
+  const m = MODES.find(x => x.id === id);
+  game.mode = m; game.seq = m.seq ? (m.shuffle ? shuffle(stageOf(m)) : stageOf(m)) : null;
+  game.got = []; game.hearts = MAX_HEARTS; game.misses = 0; game.row = null; game.prevRow = null; game.paused = false; game.goT = 0; game.eat = null; game.yuck = 0;
+  game.convo = []; game.asking = false; game.aiBusy = false; game.lastSubj = null; game.spokenQ = ''; game.gen = (game.gen || 0) + 1;
+  game.aiQ = m.seq ? '' : `我们来聊${m.noun}吧！你最喜欢什么${m.noun}呀？`;   // 顺序模式的问题由 seqAsk 按这一排的目标出
+  $('count').textContent = ''; $('pauseBtn').textContent = '⏸';
+  Object.assign(ball, { x:0, vx:0, hop:0, hopV:0, falling:false, fallT:0, inv:0 });
+  dist = 0; speed = 0; particles = [];
+  document.documentElement.style.setProperty('--mc', m.color);
+  game.env = rollEnv(); game.inTunnel = false;
+  buildTrack(m.world); paintSky(); initWeather(); smoke = []; fish = []; game.inGlass = false;
+  $('wx').textContent = envBadge(game.env);
+  $('modes').classList.add('off'); $('modal').classList.add('off');
+  $('help').style.opacity = opts.ai ? 0 : 1;
+  showAiPanel(opts.ai);
+  updateHud();
+  game.state = 'count'; game.countT = 3.2;
+  setTimeout(() => { if (game.state === 'count') toast(`${envBadge(game.env)} 今天：${TIMES[game.env.time].name} · ${WEATHERS[game.env.weather].name}`); }, 200);
+  // 天气放前面、题目放最后（以前天气接在题目后面念，孩子听完就忘了题）。AI 模式的题目到第一排由小球在对话里问
+  const q0 = game.seq && game.seq[0].q ? game.seq[0] : null;
+  speak(`今天是${TIMES[game.env.time].name}，${WEATHERS[game.env.weather].say}。` + (opts.ai ? `${m.name}模式，出发！` : q0 ? `数字模式第${game.seq.level}关！算一算，${q0.a}加${q0.b}等于几？撞对答案。` : m.id === 'hanzi' ? `汉字模式！找一找：${game.seq[0].label}，${game.seq[0].word}的${game.seq[0].label}。` : m.seq ? `${m.name}模式！按顺序撞${m.noun}，从${game.seq[0].label}开始。` : `${m.name}模式！只撞${m.noun}，别撞别的哦。`));
+}
+
+/* ============================ 开关：AI 对话 / 护栏 ============================ */
+const OPT_KEY = 'yy-skyball-opts';
+const opts = { ai:false, fence:false };
+try{ Object.assign(opts, JSON.parse(localStorage.getItem(OPT_KEY) || '{}')); }catch(e){}
+const saveOpts = () => { try{ localStorage.setItem(OPT_KEY, JSON.stringify(opts)); }catch(e){} };
+
+/* AI 配置和地铁游戏共用：同一个网址下的 localStorage（yy-metro-cfg）+ 服务器上的 ai-config.json；
+   Amp 沙盒里有 api/chat 时直接走 Amp AI。都没有就用本地规则判断，照样能玩 */
+const cfg = { endpoint:'https://api.openai.com/v1', key:'', model:'gpt-4o-mini' };
+try{ const c = JSON.parse(localStorage.getItem('yy-metro-cfg') || '{}'); if (c.key) Object.assign(cfg, { endpoint:c.endpoint || cfg.endpoint, key:c.key, model:c.model || cfg.model }); }catch(e){}
+let ampAI = false;
+fetch('ai-config.json', { cache:'no-store' }).then(r => r.ok ? r.json() : null).then(c => {
+  if (c && c.key) Object.assign(cfg, { endpoint:(c.endpoint || cfg.endpoint).trim(), key:c.key.trim(), model:(c.model || cfg.model).trim() });
+  renderToggles();
+}).catch(() => {});
+fetch('api/health', { cache:'no-store' }).then(r => r.ok ? r.json() : null).then(j => { if (j && j.amp){ ampAI = true; renderToggles(); } }).catch(() => {});
+const aiReady = () => ampAI || !!cfg.key;
+
+function renderToggles(){
+  $('tgAI').classList.toggle('on', opts.ai); $('tgAI').innerHTML = `🤖 AI 对话：<b>${opts.ai ? '开' : '关'}</b>`;
+  $('tgFence').classList.toggle('on', opts.fence); $('tgFence').innerHTML = `🚧 护栏：<b>${opts.fence ? '开' : '关'}</b>`;
+  const notes = [];
+  if (opts.ai) notes.push(`🤖 每到一排小球先停下，跟它聊一句和话题有关的话，说得切题它才往前滚（${aiReady() ? '已连上 AI' : '没连上 AI，先用本地规则判断'}）`);
+  if (opts.fence) notes.push('🚧 跑道两边有护栏，小球不会掉下去');
+  $('tgNote').innerHTML = notes.join('<br>');
+}
+$('tgAI').addEventListener('click', () => { opts.ai = !opts.ai; saveOpts(); renderToggles(); });
+$('tgFence').addEventListener('click', () => { opts.fence = !opts.fence; saveOpts(); renderToggles(); });
+
+/* ---------- AI 对话 ---------- */
+/* 顺序模式（数字 / 字母 / 汉字）：聊天的问题由游戏按「这一排要撞的那个」来出，答案也由游戏自己判断，
+   不让 AI 另出一道题（以前会出现跑道在算 2+4、聊天却在问 3+5） */
+function seqAsk(t){
+  if (t.q) return `${t.a}加${t.b}等于几呀？`;
+  if (t.cat === '汉字') return `找一找「${t.label}」，${t.word}的${t.label}。你也说一遍吧！`;
+  const prev = game.seq[game.seq.indexOf(t) - 1];
+  return prev ? `${prev.label}后面是${t.cat === '字母' ? '哪个字母' : '几'}呀？` : `我们从${t.label}开始，跟我说：${t.label}！`;
+}
+const CN_NUM = { 零:0, 一:1, 二:2, 两:2, 三:3, 四:4, 五:5, 六:6, 七:7, 八:8, 九:9 };
+// 孩子话里最后说的那个数（「2加4等于6」→ 6，「八」→ 8，「二十五」→ 25）
+function lastNum(text){
+  const all = text.match(/\d+|[零一二两三四五六七八九十百]+/g); if (!all) return null;
+  const s = all[all.length - 1];
+  if (/\d/.test(s)) return +s;
+  let total = 0, cur = 0;
+  for (const ch of s){ if (ch === '十' || ch === '百'){ total += (cur || 1) * (ch === '十' ? 10 : 100); cur = 0; } else cur = CN_NUM[ch]; }
+  return total + cur;
+}
+function seqTalk(row, text){
+  const t = row.items.find(i => i.ok);
+  const ok = t.cat === '数字' ? lastNum(text) === (t.ans != null ? t.ans : +t.key)
+    : t.cat === '字母' ? text.toUpperCase().includes(t.label)
+    : text.includes(t.label) || text.includes(t.word);
+  if (ok) return { ok:true, reply:`${pick(['对啦！', '真棒！', '答对啦！'])}${sayText(t)}` };
+  // 连着答错 3 次就告诉他答案，接着往前滚，别卡在这一排（语音识别听错字母也不至于卡死）
+  row.tries = (row.tries || 0) + 1;
+  if (row.tries >= 3) return { ok:true, reply:`没关系，我们一起记住：${sayText(t)}` };
+  return { ok:false, reply: t.q ? `再算算哦，${t.a}加${t.b}等于几呀？` : t.cat === '汉字' ? `我们在找「${t.label}」，${t.word}的${t.label}，再说一遍吧～` : `不对哦，${seqAsk(t)}` };
+}
+function showAiPanel(on){
+  $('aiPanel').classList.toggle('on', on);
+  if (!on){ stopMic(); return; }
+  $('aiQText').textContent = '小球出发啦～到了第一排，就跟它聊聊天！';
+  $('aiRes').textContent = ''; $('aiRes').className = '';
+  setAiInput(false);
+}
+function setAiInput(on){
+  game.inputOn = on;
+  $('aiInput').disabled = !on; $('aiSend').disabled = !on; $('aiMic').disabled = !on || !micReady;
+  $('aiInput').placeholder = on ? '接着话题说一句…' : game.asking ? '先听小球说完…' : '小球在滚…';
+}
+function aiNote(msg, cls = 'bad'){ $('aiRes').className = cls; $('aiRes').textContent = msg; }
+function askNow(){
+  game.asking = true;
+  if (game.mode.seq) game.aiQ = seqAsk(game.seq[game.got.length]);
+  $('aiQText').textContent = game.aiQ;
+  if (game.spokenQ !== game.aiQ){ game.spokenQ = game.aiQ; speak(game.aiQ, true); }
+  setAiInput(false);   // 等问题念完，update() 里再打开输入
+}
+// 孩子话里提到了这个话题里的哪样东西（取最长的，比如「青苹果」优先于「苹果」）
+function mentioned(text, m = game.mode){
+  if (!m.items) return null;
+  let best = null;
+  for (const it of m.items) if (text.includes(it.label) && (!best || it.label.length > best.label.length)) best = it;
+  return best;
+}
+function otherCat(text){
+  for (const w of WORD_MODES) if (w !== game.mode){ const it = mentioned(text, w); if (it) return { it, w }; }
+  return null;
+}
+// 没连 AI 时的本地判断：提到这个话题的东西 / 话题名，或者接着上一个东西往下说，就算切题
+function localTalk(text){
+  const m = game.mode;
+  if (game.convo.some(c => c.role === 'kid' && c.text === text)) return { ok:false, reply:'这句刚才说过啦，换一句新的吧～' };
+  if (/不知道|不记得|不想说|随便/.test(text) && !mentioned(text)) return { ok:false, reply:`没关系～你可以说说你见过的${m.noun}，或者喜欢的${m.noun}呀！` };
+  const subj = mentioned(text), other = otherCat(text);
+  const ok = !!subj || text.includes(m.noun) || (!!game.lastSubj && [...text].length >= 3 && !other);
+  if (!ok) return { ok:false, reply: other ? `${other.it.label}是${other.w.noun}哦，我们在聊${m.noun}，再说一句吧～` : `我们在聊${m.noun}哦，说一句和${m.noun}有关的话吧～` };
+  const s = subj ? subj.label : game.lastSubj;
+  let pool;
+  if (!s) pool = [`你最喜欢哪种${m.noun}呀？`, `说说你见过的${m.noun}吧！`];
+  else if (m.id === 'train') pool = [`${s}有几个轮子呀？`, `你坐过${s}吗？`, `${s}跑得快不快？`, `${s}是什么颜色的？`];
+  else if (m.id === 'animal') pool = [`${s}会怎么叫呀？`, `${s}住在哪里呀？`, `${s}喜欢吃什么呀？`, `${s}是什么颜色的？`];
+  else pool = [`${s}是什么颜色的呀？`, `${s}是什么味道的？`, `你为什么喜欢${s}呀？`, `${s}是圆圆的还是长长的？`];
+  return { ok:true, reply:`${pick(['说得真好！', '对呀！', '好棒！'])}${pick(pool)}` };
+}
+async function aiChat(text){
+  const m = game.mode;
+  const topic = m.noun;
+  const hist = game.convo.slice(-8).map(c => `${c.role === 'kid' ? '佑佑' : '小球'}：${c.text}`).join('\n');
+  const system = '你是「小球」，陪 4 岁半的佑佑玩天空滚球游戏、练口语。每到一站，佑佑要说一句话接着当前话题往下聊，说得切题小球才往前滚。你要：1) 判断佑佑这句话是不是在聊当前话题，或者是在回答你上一句的提问（回答你的问题就算切题，哪怕提到别的东西）；跟之前说过的一模一样的话不算；2) 用一句简单好玩的短话回应，并接着话题再问一个小问题，让他继续说。只输出一行 JSON，不要任何解释。';
+  const prompt = `当前话题：${topic}\n对话历史：\n${hist || '（刚开始）'}\n小球上一句：${game.aiQ}\n佑佑刚刚说：${text}\n\n只返回：{"ok": true或false, "reply": "你对佑佑说的话，25字以内；切题就夸一句再问一个相关的小问题，不切题就温柔地提醒他聊${m.noun}"}`;
+  const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 12000);
+  try{
+    let o = null;
+    if (ampAI){
+      const r = await fetch('api/chat', { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify({ system, prompt }), signal:ctl.signal });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      o = await r.json();
+    } else {
+      const r = await fetch(cfg.endpoint.replace(/\/+$/, '') + '/chat/completions', {
+        method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer ' + cfg.key }, signal:ctl.signal,
+        body:JSON.stringify({ model:cfg.model, temperature:0.7, messages:[{ role:'system', content:system }, { role:'user', content:prompt }] })
+      });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const j = await r.json();
+      const txt = ((j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || '').trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
+      try{ o = JSON.parse(txt); }catch(_){ const mm = txt.match(/\{[\s\S]*\}/); if (mm) o = JSON.parse(mm[0]); }
+    }
+    if (!o || typeof o.reply !== 'string') throw new Error('返回格式不对');
+    return { ok:o.ok !== false, reply:o.reply.trim() };
+  } finally { clearTimeout(timer); }
+}
+async function aiSubmit(raw){
+  const text = (raw || '').trim();
+  if (!text || game.aiBusy || !game.asking) return;
+  $('aiInput').value = '';
+  const m = game.mode, row = game.row, gen = game.gen;
+  let r = null;
+  if (m.seq) r = seqTalk(row, text);   // 顺序模式：游戏自己判对错，不问 AI
+  else {
+    game.aiBusy = true; setAiInput(false);
+    aiNote(`你说：「${text}」 · 🤖 想一想…`, '');
+    if (aiReady()){ try{ r = await aiChat(text); }catch(e){ r = null; } }
+    if (!r) r = localTalk(text);
+    game.aiBusy = false;
+    // 等 AI 的时候换了模式 / 重开了一局：这个回答作废，不能串到新的一局里
+    if (gen !== game.gen || game.state !== 'play' || !game.asking) return;
+  }
+  game.convo.push({ role:'kid', text }, { role:'ai', text:r.reply });
+  const subj = mentioned(text); if (subj) game.lastSubj = subj.label;
+  if (r.ok){
+    aiNote(`✅ 你说：「${text}」`, 'good');
+    // 小球现在就回话；撞上的时候只放音效不再说话，免得把下一句盖住
+    if (!m.seq){ game.aiQ = r.reply || game.aiQ; game.spokenQ = game.aiQ; }
+    $('aiQText').textContent = r.reply;
+    speak(r.reply);
+    // 说到了这个话题里的东西：这一排要撞的就换成它
+    const tgt = row && row.items.find(i => i.ok);
+    if (tgt && subj && !m.seq && !game.got.some(g => g.key === subj.key)) Object.assign(tgt, { key:subj.key, label:subj.label, emoji:subj.emoji, col:tokenColor(subj.key) });
+    if (row) row.cleared = true;
+    game.asking = false; setAiInput(false);
+  } else {
+    game.misses++; sfxBad(); ball.hopV = 1.6;
+    aiNote(`🤔 你说：「${text}」— ${r.reply}`);
+    speak(r.reply);
+    setAiInput(false);   // 提醒念完了再让他重新回答
+  }
+}
+$('aiSend').addEventListener('click', () => aiSubmit($('aiInput').value));
+$('aiInput').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing){ e.preventDefault(); aiSubmit($('aiInput').value); } });
+
+/* ---------- 语音输入：按住说话（同地铁游戏） ---------- */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const micReady = !!(SR && window.isSecureContext);
+let stopMic = () => {};
+if (micReady){
+  const rec = new SR();
+  rec.lang = 'zh-CN'; rec.interimResults = true; rec.continuous = true; rec.maxAlternatives = 1;
+  const btn = $('aiMic');
+  let holding = false, sending = false, listening = false, stopped = true, finalText = '', interim = '', t0 = 0, wd = null;
+  const heard = () => (finalText + interim).trim();
+  const finish = () => {
+    clearTimeout(wd); stopped = true; holding = false; sending = false;
+    if (listening){ try{ rec.abort(); }catch(e){} }
+    listening = false; btn.classList.remove('on'); btn.textContent = '🎤 按住 说话';
+  };
+  stopMic = finish;
+  const deliver = () => { if (stopped) return; const t = heard(); finish(); if (!t){ aiNote('没听清，再按住说一次吧～'); return; } aiSubmit(t); };
+  const startRec = () => { try{ rec.start(); }catch(e){ setTimeout(() => { if (!holding || stopped) return; try{ rec.start(); }catch(_){ finish(); aiNote('麦克风启动失败，再按一次试试'); } }, 300); } };
+  const release = () => {
+    if (!holding) return;
+    holding = false; clearTimeout(wd);
+    if (Date.now() - t0 < 400){ finish(); aiNote('说话时间太短，按住多说一会儿～'); return; }
+    if (!listening){ finish(); aiNote('麦克风还没准备好，再按住说一次'); return; }
+    sending = true; btn.textContent = '转文字中…';
+    wd = setTimeout(deliver, 2500);
+    try{ rec.stop(); }catch(e){ deliver(); }
+  };
+  btn.addEventListener('pointerdown', e => {
+    if (e.button > 0 || holding || btn.disabled) return;
+    e.preventDefault();
+    try{ btn.setPointerCapture(e.pointerId); }catch(_){}
+    stopSpeech();
+    holding = true; stopped = false; finalText = ''; interim = ''; t0 = Date.now();
+    btn.classList.add('on'); btn.textContent = '松开 发送'; $('aiInput').value = '';
+    startRec(); wd = setTimeout(release, 30000);
+  });
+  btn.addEventListener('pointerup', release);
+  btn.addEventListener('pointercancel', () => { if (holding) finish(); });
+  btn.addEventListener('contextmenu', e => e.preventDefault());
+  rec.onstart = () => { listening = true; if (stopped){ try{ rec.abort(); }catch(e){} } };
+  rec.onresult = e => {
+    if (stopped) return;
+    let tmp = '';
+    for (let i = (e.resultIndex || 0); i < e.results.length; i++){ const r = e.results[i], t = (r[0] && r[0].transcript) || ''; if (r.isFinal) finalText += t; else tmp += t; }
+    interim = tmp; $('aiInput').value = heard();
+  };
+  rec.onerror = ev => {
+    const err = ev && ev.error;
+    if (err === 'aborted' || err === 'no-speech') return;
+    finish();
+    aiNote(err === 'not-allowed' || err === 'service-not-allowed' ? '麦克风权限没打开，在浏览器里允许一下' : err === 'network' ? '语音识别要联网，检查一下网络' : '语音识别没成功，再按住说一次吧');
+  };
+  rec.onend = () => { listening = false; if (stopped) return; if (sending){ deliver(); return; } if (holding){ finalText += interim; interim = ''; startRec(); } };
+}
+
+/* ============================ 碰撞结果 ============================ */
+function resolveRow(row){
+  row.done = true;
+  if (row.finish){ win(); return; }
+  let best = null;
+  for (const it of row.items){ const d = Math.abs(it.lane - ball.x); if (d < 0.4 && (!best || d < best.d)) best = { it, d }; }
+  const m = game.mode;
+  const target = row.items.find(i => i.ok);
+  for (const it of row.items) if (!best || it !== best.it){ it.state = 'fade'; it.t = performance.now(); }
+  if (!best){
+    if (target){ toast(target.q ? `错过了，再算算 ${target.q}=?` : `错过了，再找 ${target.emoji || target.label}`); game.misses++; }
+    return;
+  }
+  const it = best.it; it.t = performance.now();
+  const p = itemScreen.get(it);
+  if (it.ok){
+    it.state = 'got';
+    game.got.push(it);
+    sfxGood();
+    if (m.ball === 'mouse') game.eat = { emoji:it.emoji, from:p ? { x:p.x, y:p.y } : null, t0:performance.now(), bites:0 };
+    // AI 模式里小球刚在对话里说过了，撞上时只放音效（不然会排在下一个问题后面，或者把问题盖住）
+    if (!opts.ai){ if (m.ball === 'mouse') speak(`${it.label}！嗷呜，好吃～`); else sayItem(it); }
+    if (p) burst(p.x, p.y, it.col, 30);
+    toast(game.got.length >= GOAL ? '撞齐 10 个啦！冲向终点 🏁' : it.q ? `${it.q}=${it.label}！对啦` : `${it.emoji || it.pic || ''} ${it.label}${it.py ? ' ' + it.py : ''}！对啦`);
+    if (it.q && !opts.ai && game.got.length < GOAL){ const nx = game.seq[game.got.length]; speak(`下一题，${nx.a}加${nx.b}等于几？`, true); }
+    if (m.id === 'hanzi' && !opts.ai && game.got.length < GOAL){ const nx = game.seq[game.got.length]; speak(`下一个，找${nx.label}，${nx.word}的${nx.label}`, true); }
+    speed += 80;
+  } else {
+    it.state = 'bad';
+    if (m.ball === 'mouse') game.yuck = performance.now();
+    game.misses++;
+    if (ball.inv <= 0){ game.hearts--; ball.inv = 1; }
+    sfxBad();
+    ball.vx = (ball.x >= it.lane ? 1 : -1) * 2.4; ball.hopV = 2.2;
+    const hz = m.id === 'hanzi';
+    const want = hz ? `要找「${target ? target.label : ''}」` : m.seq ? `要撞 ${target ? target.label : ''}` : `要撞${m.noun}`;
+    const what = it.cat === m.noun ? (hz ? `这是「${it.label}」` : `这是 ${it.label}`) : `${it.emoji || ''}${it.label}是${it.cat}`;
+    if (target && target.q){ toast(`${it.label} 不对哦，${target.q}=? 再算算`, true); speak(`${it.label}不对哦，${target.a}加${target.b}等于几？再算算`); }
+    else {
+      toast(`${what}，${want}哦`, true);
+      speak(`${it.label}${it.cat === m.noun ? '' : '是' + it.cat}，${m.seq ? '要撞' + (target ? target.label : '') : '要撞' + m.noun}哦`, false);
+    }
+    if (game.hearts <= 0) setTimeout(lose, 600);
+  }
+  updateHud();
+}
+
+function win(){
+  game.state = 'over';
+  const m = game.mode;
+  const n = levelCount(m), lvNow = n ? getLevel(m) : 0;
+  wins[m.id] = (wins[m.id] || 0) + 1;
+  try{ localStorage.setItem(WIN_KEY, JSON.stringify(wins)); }catch(e){}
+  const hasNext = n && (m.stageAt ? lvNow < n - 1 : true);
+  if (n) setLevel(m, m.stageAt ? lvNow + 1 : (lvNow + 1) % n);
+  sfxWin();
+  for (let i = 0; i < 6; i++) setTimeout(() => burst(W * (0.15 + Math.random() * 0.7), H * (0.15 + Math.random() * 0.4), pick(TOKEN_COLS), 40), i * 200);
+  const stars = game.hearts >= 5 ? 3 : game.hearts >= 3 ? 2 : 1;
+  speak(`到终点啦！你撞对了${GOAL}个${m.noun}，太棒了！`);
+  setTimeout(() => modal(`
+    <h3>🏁 到终点啦！</h3>
+    <p style="font-size:34px;margin:4px 0">${'⭐'.repeat(stars)}${'☆'.repeat(3 - stars)}</p>
+    <p>${m.emoji} ${m.name}模式 · 撞对 ${GOAL} 个${m.noun}${game.misses ? `，中间错过 / 撞错 ${game.misses} 次` : '，一次都没错！'}</p>
+    <div class="chips">${game.got.map(it => `<span>${it.q ? it.q + '=' : ''}${it.emoji ? it.emoji + ' ' : ''}${it.label}</span>`).join('')}</div>
+    <div class="wbtns"><button id="again" style="background:${m.color};color:#fff">${hasNext ? '下一关' : '再玩一次'}</button>
+    <button id="other" style="background:#EEF2F7;color:#374151">换个模式</button></div>`), 900);
+}
+function lose(){
+  if (game.state !== 'play') return;
+  game.state = 'over';
+  const m = game.mode;
+  speak('哎呀，爱心用完啦，再来一次吧！');
+  modal(`
+    <h3>💔 爱心用完啦</h3>
+    <p>${m.emoji} ${m.name}模式 · 已经撞对 ${game.got.length} 个</p>
+    <div class="chips">${game.got.map(it => `<span>${it.q ? it.q + '=' : ''}${it.emoji ? it.emoji + ' ' : ''}${it.label}</span>`).join('') || '<span>再试一次就能行！</span>'}</div>
+    <div class="wbtns"><button id="again" style="background:${m.color};color:#fff">再来一次</button>
+    <button id="other" style="background:#EEF2F7;color:#374151">换个模式</button></div>`);
+}
+function modal(html){
+  showAiPanel(false);
+  $('mbox').innerHTML = html; $('modal').classList.remove('off');
+  $('again').onclick = () => startMode(game.mode.id);
+  $('other').onclick = showModes;
+}
+
+/* ============================ 赛道（伪 3D，参考 OutRun 的分段投影） ============================ */
+const SEG = 200, ROADW = 1300, CAMH = 1000, FOV = 100, DRAW = 200, THICK = 520, BALLR = 250, ITEMR = 300;
+const camDepth = 1 / Math.tan(FOV / 2 * Math.PI / 180);
+const playerZ = CAMH * camDepth * 1.5;
+const ROW_AHEAD = 46 * SEG, AI_STOP = 14 * SEG, FENCE_H = 380, TUN_H = 2000, TUBE_H = 2300;
+let segs = [], trackLen = 1;
+
+const easeIn = (a, b, t) => a + (b - a) * t * t;
+const easeInOut = (a, b, t) => a + (b - a) * ((-Math.cos(t * Math.PI) / 2) + 0.5);
+function addSeg(curve, y){
+  const n = segs.length, y1 = n ? segs[n - 1].y2 : 0;
+  segs.push({ i:n, z1:n * SEG, z2:(n + 1) * SEG, y1, y2:y, curve });
+}
+function addRoad(enter, hold, leave, curve, hill){
+  const sY = segs.length ? segs[segs.length - 1].y2 : 0, eY = sY + hill * SEG, tot = enter + hold + leave;
+  for (let i = 0; i < enter; i++) addSeg(easeIn(0, curve, i / enter), easeInOut(sY, eY, i / tot));
+  for (let i = 0; i < hold; i++)  addSeg(curve, easeInOut(sY, eY, (enter + i) / tot));
+  for (let i = 0; i < leave; i++) addSeg(easeInOut(curve, 0, i / leave), easeInOut(sY, eY, (enter + hold + i) / tot));
+}
+let seaY = -3000;
+function buildTrack(world){
+  segs = [];
+  addRoad(30, 60, 30, 0, 0);
+  if (world === 'coaster') for (let k = 0; k < 32; k++) addRoad(18 + rand(10), 12 + rand(25), 18 + rand(10), pick([-2.5, -1.8, 0, 0, 1.8, 2.5]), pick([28, -28, 40, -40, 18, -18]));
+  else for (let k = 0; k < 26; k++) addRoad(25, 25 + rand(40), 25, pick([-2.5, -1.8, -1.2, 0, 0, 1.2, 1.8, 2.5]), pick([0, 0, 12, -12, 20, -20]));
+  addRoad(30, 30, 30, 0, -segs[segs.length - 1].y2 / SEG);   // 回到起点高度，赛道首尾相接
+  trackLen = segs.length * SEG;
+  const rail = world === 'rail';
+  if (rail){
+    // 铁路比较平：把高低起伏压到 3000 以内，潜进海底的坡才不会太陡
+    const lo = Math.min(...segs.map(sg => sg.y1)), hi = Math.max(...segs.map(sg => sg.y1));
+    const k = Math.min(1, 3000 / Math.max(1, hi - lo));
+    for (const sg of segs){ sg.y1 *= k; sg.y2 *= k; }
+  }
+  // 海面在最低点下面一大截
+  seaY = Math.min(...segs.map(sg => sg.y1)) - 2800;
+  if (rail){
+    // 海底玻璃隧道（先排它，隧道再避开它）：铁路慢慢潜到海面下 3600，在玻璃管里走一段再爬上来。
+    // 第一段放得早一点（一局大约跑 500~900 节），保证每局都能钻到海底；头尾高度不变，赛道照样首尾相接
+    const L = 340;
+    const starts = [200 + rand(150)];
+    const second = starts[0] + L + 400 + rand(Math.max(1, segs.length - starts[0] - 2 * L - 600));
+    if (second + L < segs.length - 150) starts.push(second);
+    for (const i0 of starts){
+      const D = Math.min(...segs.slice(i0, i0 + L).map(sg => sg.y1)) - (seaY - 3600);
+      const prof = k => { const t = k / L; return D * (t < .35 ? easeInOut(0, 1, t / .35) : t > .65 ? easeInOut(1, 0, (t - .65) / .35) : 1); };
+      const ys = [];
+      for (let k = 0; k <= L; k++) ys.push((k < L ? segs[i0 + k].y1 : segs[i0 + L - 1].y2) - prof(k));
+      for (let k = 0; k < L; k++){
+        const sg = segs[i0 + k];
+        sg.y1 = ys[k]; sg.y2 = ys[k + 1]; sg.glassZone = true;
+        if (Math.min(sg.y1, sg.y2) < seaY + 500) sg.glass = true;
+      }
+    }
+  }
+  // 时不时有一段隧道：穿过一座小山（不和海底隧道重叠）
+  for (let i = 160 + rand(200); ; ){
+    const len = rail ? 90 + rand(80) : 70 + rand(60);
+    if (i + len >= segs.length - 100) break;
+    let clash = -1;
+    for (let k = -30; k < len + 30; k++) if (segs[i + k] && segs[i + k].glassZone){ clash = i + k; break; }
+    if (clash >= 0){ while (segs[clash] && segs[clash].glassZone) clash++; i = clash + 40; continue; }
+    for (let k = 0; k < len; k++) segs[i + k].tunnel = true;
+    segs[i].portal = true;
+    i += len + (rail ? 140 + rand(200) : 260 + rand(340));
+  }
+  // 铁路世界在路边随机摆几座从海里冒出来的山
+  if (world === 'coaster') for (const sg of segs) if (!sg.tunnel && Math.random() < 0.035)
+    sg.deco = { type:Math.random() < 0.5 ? 'wheel' : 'loop', side:Math.random() < 0.5 ? -1 : 1, off:2.8 + Math.random() * 2, k:0.8 + Math.random() * 0.6 };
+  if (rail) for (const sg of segs) if (!sg.tunnel && !sg.glassZone && Math.random() < 0.05)
+    sg.mtn = { side:Math.random() < 0.5 ? -1 : 1, off:2.6 + Math.random() * 2.2, h:0.8 + Math.random() * 0.9, w:0.9 + Math.random() * 0.8, snow:Math.random() < 0.4 };
+}
+const segAt = z => segs[Math.floor(((z % trackLen) + trackLen) % trackLen / SEG)];
+const trackY = z => { const s = segAt(z), p = (((z % trackLen) + trackLen) % trackLen % SEG) / SEG; return s.y1 + (s.y2 - s.y1) * p; };
+
+/* ============================ 画面 ============================ */
+const cv = $('cv'), ctx = cv.getContext('2d');
+let W = 0, H = 0, DPR = 1, yH = 0, yF = 0, xF = 0, sky = null, camY = CAMH;
+let particles = [];
+const itemScreen = new Map();
+
+function resize(){
+  W = window.innerWidth; H = window.innerHeight;
+  DPR = Math.min(2, window.devicePixelRatio || 1);
+  cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+  xF = Math.max(W / 2, H * 0.36);                // 竖屏时把跑道放大一点，不然又窄又远
+  yF = Math.min(H / 2, xF * 0.9);
+  yH = Math.max(H * 0.25, H * 0.8 - yF / 1.5);   // 地平线：让小球落在屏幕下方 80% 处
+  paintSky(); initWeather();
+}
+function mix(hex, to, t){
+  const a = parseInt(hex.slice(1), 16), b = parseInt(to.slice(1), 16);
+  const c = s => Math.round(((a >> s) & 255) * (1 - t) + ((b >> s) & 255) * t);
+  return `rgb(${c(16)},${c(8)},${c(0)})`;
+}
+let pal = {};
+/* ---------- 天气和白天黑夜：每局随机 ---------- */
+const TIMES = { day:{ name:'白天', e:'☀️' }, dusk:{ name:'傍晚', e:'🌇' }, night:{ name:'晚上', e:'🌙' } };
+const WEATHERS = { clear:{ name:'晴天', say:'天气晴朗', e:'' }, cloudy:{ name:'多云', say:'天上有好多云', e:'⛅' }, rain:{ name:'下雨', say:'在下雨', e:'🌧️' },
+  snow:{ name:'下雪', say:'在下雪', e:'❄️' }, rainbow:{ name:'彩虹', say:'天上有彩虹', e:'🌈' } };
+function rollEnv(){
+  const r = Math.random(), time = r < 0.5 ? 'day' : r < 0.72 ? 'dusk' : 'night';
+  const w = Math.random();
+  let weather = w < 0.36 ? 'clear' : w < 0.54 ? 'cloudy' : w < 0.72 ? 'rain' : w < 0.88 ? 'snow' : 'rainbow';
+  if (weather === 'rainbow' && time !== 'day') weather = 'clear';
+  return { time, weather };
+}
+const envBadge = e => (e.time !== 'day' || e.weather === 'clear' || e.weather === 'rainbow' ? TIMES[e.time].e : '') + WEATHERS[e.weather].e;
+const SKIES = {
+  day:   { top:'#5FA8FF', mid:'#A9C8FF', hor:'#FFD3E6', sea1:'#FFE6F1', sea2:'#F3ECFF', cloud:'255,255,255', ca:.75 },
+  dusk:  { top:'#4338CA', mid:'#F472B6', hor:'#FDBA74', sea1:'#FED7AA', sea2:'#FBCFE8', cloud:'255,214,201', ca:.7 },
+  night: { top:'#070B24', mid:'#1E1B4B', hor:'#3B3486', sea1:'#2E2A6B', sea2:'#141432', cloud:'110,120,165', ca:.45 },
+  grey:  { top:'#7C8BA1', mid:'#A7B4C6', hor:'#D5DCE6', sea1:'#E2E8F0', sea2:'#CBD5E1', cloud:'226,232,240', ca:.85 },
+  snow:  { top:'#9DB4D3', mid:'#C9D6E8', hor:'#EEF2F8', sea1:'#F1F5F9', sea2:'#E2E8F0', cloud:'248,250,252', ca:.9 }
+};
+function mixHex(a, b, t){
+  const A = parseInt(a.slice(1), 16), B = parseInt(b.slice(1), 16);
+  const c = sh => Math.round(((A >> sh) & 255) * (1 - t) + ((B >> sh) & 255) * t);
+  return '#' + ((c(16) << 16) | (c(8) << 8) | c(0)).toString(16).padStart(6, '0');
+}
+let tun = {}, uw = {}, palSubA = {}, palSubB = {};
+function paintSky(){
+  if (!W) return;
+  const mc = game.mode ? game.mode.color : '#3B82F6';
+  const env = game.env || { time:'day', weather:'clear' };
+  const wet = env.weather === 'rain' || env.weather === 'cloudy';
+  // 天黑 / 傍晚 / 阴雨天，跑道颜色跟着暗一点（要撞的东西不变暗，晚上反而更显眼）
+  const dim = env.time === 'night' ? 0.45 : env.time === 'dusk' ? 0.18 : wet ? 0.14 : 0;
+  const dimTo = env.time === 'night' ? '#1E1B4B' : env.time === 'dusk' ? '#7C2D12' : '#475569';
+  const L = h => dim ? mixHex(h, dimTo, dim) : h;
+  pal = { light:L(mixHex(mc, '#FFFFFF', .82)), dark:L(mixHex(mc, '#FFFFFF', .62)), side:L(mixHex(mc, '#000000', .3)), side2:L(mixHex(mc, '#000000', .45)), rumble:L(mc), white:L('#FFFFFF') };
+  Object.assign(pal, { gravelA:L('#A8A29E'), gravelB:L('#948D86'), tie:L('#8B5A2B'), rail:L('#E2E8F0') });
+  tun = { mtnGreen:L('#3F8F57'), wallA:L('#8A8178'), wallB:L('#7A726A'), ceil:L('#5E5852'), walk:L('#B8B0A8'), rock:L('#8B7E74'), arch:L('#D6CFC7'),
+    cap: env.weather === 'snow' ? '#F8FAFC' : L('#4ADE80') };
+  uw = { top:L('#38BDF8'), mid:L('#0369A1'), bot:L('#0C4A6E'), sand:L('#E9D8A6'), weed:L('#15803D') };
+  const sub = t => Object.fromEntries(Object.entries(pal).map(([k, v]) => [k, mixHex(v, '#0369A1', t)]));
+  palSubA = sub(.55); palSubB = sub(.18);   // 在海面上看水下的路：很蓝；人在海底隧道里：淡淡一点蓝
+  const sk = env.time === 'night' ? SKIES.night : wet ? SKIES.grey : env.weather === 'snow' ? SKIES.snow : SKIES[env.time];
+  // 天空 + 云海，做成两倍宽的横条，转弯时横向滚动
+  sky = document.createElement('canvas');
+  const SW = Math.round(W * 2);
+  sky.width = SW * DPR; sky.height = cv.height;
+  const c = sky.getContext('2d');
+  c.setTransform(DPR, 0, 0, DPR, 0, 0);
+  const g = c.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, sk.top); g.addColorStop(yH / H * 0.6, sk.mid); g.addColorStop(yH / H, sk.hor);
+  g.addColorStop(Math.min(1, yH / H + 0.02), sk.sea1); g.addColorStop(1, sk.sea2);
+  c.fillStyle = g; c.fillRect(0, 0, SW, H);
+  let seed = 7; const R = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const glow = (x, y, r, col, a) => { const gg = c.createRadialGradient(x, y, 0, x, y, r); gg.addColorStop(0, `rgba(${col},${a})`); gg.addColorStop(1, `rgba(${col},0)`); c.fillStyle = gg; c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2); c.fill(); };
+  if (env.time === 'night'){
+    // 星星 + 月亮
+    for (let i = 0; i < 160; i++){ c.globalAlpha = 0.3 + R() * 0.7; c.fillStyle = '#FFFFFF'; c.beginPath(); c.arc(R() * SW, R() * yH * 0.95, 0.5 + R() * 1.4, 0, Math.PI * 2); c.fill(); }
+    c.globalAlpha = 1;
+    const mx = SW * 0.32, my = yH * 0.3, mr = Math.max(18, yH * 0.09);
+    glow(mx, my, mr * 3.2, '254,249,195', .25);
+    c.fillStyle = '#FEF9C3'; c.beginPath(); c.arc(mx, my, mr, 0, Math.PI * 2); c.fill();
+    c.fillStyle = 'rgba(202,190,140,.45)';
+    for (const [dx, dy, rr] of [[-.3, -.2, .22], [.25, .15, .16], [-.05, .35, .12]]){ c.beginPath(); c.arc(mx + dx * mr, my + dy * mr, rr * mr, 0, Math.PI * 2); c.fill(); }
+  } else if (env.time === 'dusk' && !wet){
+    const sx = SW * 0.3, sy = yH * 0.82, sr = Math.max(26, yH * 0.13);
+    glow(sx, sy, sr * 3.5, '253,186,116', .55);
+    c.fillStyle = '#FB923C'; c.beginPath(); c.arc(sx, sy, sr, 0, Math.PI * 2); c.fill();
+  } else if (!wet && env.weather !== 'snow'){
+    const sx = SW * 0.14, sy = yH * 0.24, sr = Math.max(20, yH * 0.08);
+    glow(sx, sy, sr * 4, '255,247,174', .6);
+    c.fillStyle = '#FDE047'; c.beginPath(); c.arc(sx, sy, sr, 0, Math.PI * 2); c.fill();
+  }
+  if (env.weather === 'rainbow'){
+    const rx = SW * 0.36, ry = yH + 30, rr = yH * 0.85;
+    c.lineWidth = Math.max(6, yH * 0.03); c.globalAlpha = 0.45;
+    ['#EF4444','#F97316','#FACC15','#22C55E','#3B82F6','#6366F1','#A855F7'].forEach((col, i) => { c.strokeStyle = col; c.beginPath(); c.arc(rx, ry, rr - i * c.lineWidth, Math.PI, 0); c.stroke(); });
+    c.globalAlpha = 1;
+  }
+  // 远处漂浮的彩色小星球
+  for (let i = 0; i < (game.mode && game.mode.world === 'rail' ? 0 : 9); i++){   // 铁路世界是真实的山和海，不放小星球
+    const x = R() * SW, y = yH * (0.12 + R() * 0.6), r = 10 + R() * 34, col = TOKEN_COLS[Math.floor(R() * TOKEN_COLS.length)];
+    const pg = c.createRadialGradient(x - r * .3, y - r * .3, r * .1, x, y, r);
+    pg.addColorStop(0, '#fff'); pg.addColorStop(.35, mix(col, '#FFFFFF', .35)); pg.addColorStop(1, col);
+    c.globalAlpha = env.time === 'day' && !wet ? 0.55 : 0.3; c.fillStyle = pg; c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2); c.fill();
+    if (R() < 0.35){ c.strokeStyle = 'rgba(255,255,255,.8)'; c.lineWidth = 2; c.beginPath(); c.ellipse(x, y, r * 1.7, r * .45, -0.3, 0, Math.PI * 2); c.stroke(); }
+  }
+  c.globalAlpha = 1;
+  // 云：地平线附近和云海里
+  const puff = (x, y, s, a) => {
+    c.fillStyle = `rgba(${sk.cloud},${a})`;
+    for (const [dx, dy, r] of [[0, 0, 1], [-.9, .25, .7], [.9, .25, .75], [-.45, -.35, .7], [.5, -.3, .65]]){ c.beginPath(); c.arc(x + dx * s, y + dy * s, r * s, 0, Math.PI * 2); c.fill(); }
+  };
+  const more = wet ? 2.4 : 1;
+  for (let i = 0; i < 14 * more; i++) puff(R() * SW, yH * (0.25 + R() * 0.7) * (wet ? 0.8 : 1), 14 + R() * 30 * more, sk.ca);
+  const rail = game.mode && game.mode.world === 'rail';
+  if (!rail){ for (let i = 0; i < 26; i++) puff(R() * SW, yH + 10 + R() * (H - yH), 24 + R() * 50, sk.ca * 0.8); return; }
+  // 大海
+  const sea = c.createLinearGradient(0, yH, 0, H);
+  sea.addColorStop(0, L(env.time === 'dusk' ? '#FDBA74' : '#BAE6FD')); sea.addColorStop(0.25, L('#38BDF8')); sea.addColorStop(1, L('#0369A1'));
+  c.fillStyle = sea; c.fillRect(0, yH, SW, H - yH);
+  c.strokeStyle = env.time === 'night' ? 'rgba(191,219,254,.35)' : 'rgba(255,255,255,.55)';
+  for (let i = 0; i < 220; i++){
+    const yy = yH + Math.pow(R(), 1.6) * (H - yH), k = 0.3 + (yy - yH) / (H - yH) * 2.2, xx = R() * SW;
+    c.lineWidth = Math.max(1, k); c.beginPath(); c.moveTo(xx, yy); c.quadraticCurveTo(xx + 6 * k, yy - 3 * k, xx + 12 * k, yy); c.stroke();
+  }
+  // 远处两层山脉（贴着海平线）
+  const ridge = (col, hMax, step, snow) => {
+    c.fillStyle = col; c.beginPath(); c.moveTo(0, yH);
+    const pts = [];
+    for (let xx = 0; xx <= SW + step; xx += step){ const hh = hMax * (0.35 + R() * 0.65); pts.push([xx, yH - hh]); c.lineTo(xx, yH - hh); }
+    c.lineTo(SW, yH); c.closePath(); c.fill();
+    if (snow){ c.fillStyle = 'rgba(255,255,255,.85)'; for (const [xx, yy] of pts) if (yH - yy > hMax * 0.75){ c.beginPath(); c.moveTo(xx - step * 0.18, yy + hMax * 0.12); c.lineTo(xx, yy); c.lineTo(xx + step * 0.18, yy + hMax * 0.12); c.closePath(); c.fill(); } }
+  };
+  ridge(L('#93A8C6'), yH * 0.2, 60, true);
+  ridge(L('#4D7C5A'), yH * 0.11, 44, env.weather === 'snow');
+  for (let i = 0; i < 10; i++) puff(R() * SW, yH * (0.6 + R() * 0.3), 18 + R() * 30, sk.ca * 0.7);
+}
+
+function project(y, z, cx, camZ){
+  const cz = z - camZ, s = camDepth / cz;
+  return { s, cz, x:W / 2 + s * cx * xF, y:yH - s * (y - camY) * yF, w:s * ROADW * xF };
+}
+function poly(pts, col){ ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(pts[0], pts[1]); for (let i = 2; i < pts.length; i += 2) ctx.lineTo(pts[i], pts[i + 1]); ctx.closePath(); ctx.fill(); }
+
+function render(now, dt = 0){
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  // 天空
+  const SW = W * 2, off = ((skyX % SW) + SW) % SW;
+  ctx.drawImage(sky, 0, 0, sky.width, sky.height, -off, 0, SW, H);
+  ctx.drawImage(sky, 0, 0, sky.width, sky.height, SW - off, 0, SW, H);
+  const railWorld = game.mode && game.mode.world === 'rail', under = railWorld && camY < seaY;
+  underFade += ((under ? 1 : 0) - underFade) * Math.min(1, dt * 3);
+  if (railWorld && underFade > 0.01){ ctx.globalAlpha = underFade; drawUnderwater(now, dt); ctx.globalAlpha = 1; }
+  if (!segs.length) return;
+
+  const pos = ((dist % trackLen) + trackLen) % trackLen;
+  const base = Math.floor(pos / SEG), basePct = (pos % SEG) / SEG;
+  const ballZ = dist + playerZ;
+  camY += (trackY(ballZ) + CAMH - camY) * 0.25;
+  const camX = ball.x * ROADW * 0.5;
+  const P = [];
+  let x = 0, dx = -segs[base].curve * basePct;
+  for (let n = 0; n < DRAW; n++){
+    const seg = segs[(base + n) % segs.length];
+    const camZ = pos - (seg.i < base ? trackLen : 0);
+    const p1 = project(seg.y1, seg.z1, x - camX, camZ);
+    const p2 = project(seg.y2, seg.z2, x + dx - camX, camZ);
+    x += dx; dx += seg.curve;
+    P.push({ p1, p2, seg });
+  }
+  const nBall = Math.floor(ballZ / SEG) - Math.floor(dist / SEG);
+  const ballPct = (ballZ % SEG) / SEG;
+  const rows = [];
+  if (game.row) rows.push(game.row);
+  if (game.prevRow) rows.push(game.prevRow);
+  itemScreen.clear();
+
+  for (let n = DRAW - 1; n >= 0; n--){
+    const { p1, p2, seg } = P[n];
+    if (p1.cz <= camDepth || p2.y >= p1.y){ if (n === nBall && p1.cz > camDepth) drawBallAt(p1, p2, ballPct, now); continue; }   // 镜头后面 / 山坡背面（被坡顶挡住）的不画
+    const fog = Math.min(1, Math.max(0, (n - DRAW * 0.5) / (DRAW * 0.5)));
+    ctx.globalAlpha = 1 - fog * 0.9;
+    const pl = Math.min(seg.y1, seg.y2) < seaY ? (under ? palSubB : palSubA) : pal;
+    const t1 = p1.s * THICK * yF, t2 = p2.s * THICK * yF;
+    const rail = game.mode && game.mode.world === 'rail';
+    if (rail){
+      const ys1 = yH - p1.s * (seaY - camY) * yF;
+      if (seg.mtn) drawSideMountain(p1, seg.mtn, ys1);
+      if (seg.i % 10 === 0 && !seg.tunnel && seg.y1 > seaY + 300){   // 跨海大桥的桥墩
+        const pw = p1.w * 0.32;
+        ctx.fillStyle = pl.side2; ctx.fillRect(p1.x - pw / 2, p1.y + t1 * 0.5, pw, Math.max(0, ys1 - p1.y - t1 * 0.5));
+        ctx.fillStyle = pl.side; ctx.fillRect(p1.x - pw / 2, p1.y + t1 * 0.5, pw * 0.35, Math.max(0, ys1 - p1.y - t1 * 0.5));
+      }
+    }
+    const coaster = game.mode && game.mode.world === 'coaster';
+    if (coaster){
+      if (seg.deco) drawCoasterDeco(p1, seg.deco, now);
+      if (seg.i % 8 === 0 && !seg.tunnel){   // A 字形的彩色支架，一直伸到下面的云里
+        const gy = yH - p1.s * (seaY - camY) * yF, lw = Math.max(1.5, p1.w * 0.07);
+        ctx.strokeStyle = pl.side2; ctx.lineWidth = lw; ctx.lineCap = 'butt';
+        ctx.beginPath(); ctx.moveTo(p1.x - p1.w * 0.75, p1.y + t1 * 0.4); ctx.lineTo(p1.x - p1.w * 1.25, gy);
+        ctx.moveTo(p1.x + p1.w * 0.75, p1.y + t1 * 0.4); ctx.lineTo(p1.x + p1.w * 1.25, gy); ctx.stroke();
+        ctx.strokeStyle = '#FACC15'; ctx.lineWidth = Math.max(1, lw * 0.45);
+        ctx.beginPath(); ctx.moveTo(p1.x - p1.w * 0.85, p1.y + (gy - p1.y) * 0.25); ctx.lineTo(p1.x + p1.w * 0.85, p1.y + (gy - p1.y) * 0.25); ctx.stroke();
+      }
+    }
+    // 漂在空中的跑道：先画两侧的厚度，再画路面（过山车两边是细一点的钢梁）
+    const tk = coaster ? 0.45 : 1;
+    poly([p1.x - p1.w, p1.y, p2.x - p2.w, p2.y, p2.x - p2.w, p2.y + t2 * tk, p1.x - p1.w, p1.y + t1 * tk], pl.side);
+    poly([p1.x + p1.w, p1.y, p2.x + p2.w, p2.y, p2.x + p2.w, p2.y + t2 * tk, p1.x + p1.w, p1.y + t1 * tk], pl.side2);
+    const stripe = Math.floor(seg.i / 3) % 2;
+    if (coaster && n < 90 && !seg.tunnel){
+      // 镂空：每节只有一根横梁，能从缝里看到下面的天空
+      const a1 = 0.3, ax1 = p1.x + (p2.x - p1.x) * a1, ay1 = p1.y + (p2.y - p1.y) * a1, aw1 = p1.w + (p2.w - p1.w) * a1;
+      poly([p1.x - p1.w, p1.y, p1.x + p1.w, p1.y, ax1 + aw1, ay1, ax1 - aw1, ay1], stripe ? pl.light : pl.dark);
+    } else poly([p1.x - p1.w, p1.y, p1.x + p1.w, p1.y, p2.x + p2.w, p2.y, p2.x - p2.w, p2.y], rail ? (stripe ? pl.gravelA : pl.gravelB) : stripe ? pl.light : pl.dark);
+    const r1 = p1.w * 0.07, r2 = p2.w * 0.07;
+    const rc = stripe ? pl.white : pl.rumble;
+    poly([p1.x - p1.w, p1.y, p1.x - p1.w + r1, p1.y, p2.x - p2.w + r2, p2.y, p2.x - p2.w, p2.y], rc);
+    poly([p1.x + p1.w, p1.y, p1.x + p1.w - r1, p1.y, p2.x + p2.w - r2, p2.y, p2.x + p2.w, p2.y], rc);
+    if (rail && p1.w > 3){
+      // 三条铁路：每条有枕木和两根钢轨
+      const at = (t, lx) => [p1.x + (p2.x - p1.x) * t + lx * (p1.w + (p2.w - p1.w) * t), p1.y + (p2.y - p1.y) * t];
+      for (const lane of LANES){
+        if (n < 120){ const a = at(0, lane - 0.2), b = at(0, lane + 0.2), c2 = at(0.45, lane + 0.2), d = at(0.45, lane - 0.2); poly([...a, ...b, ...c2, ...d], pl.tie); }
+        for (const rl of [-0.11, 0.11]){
+          const lx = lane + rl, g1 = p1.w * 0.016, g2 = p2.w * 0.016;
+          poly([p1.x + lx * p1.w - g1, p1.y, p1.x + lx * p1.w + g1, p1.y, p2.x + lx * p2.w + g2, p2.y, p2.x + lx * p2.w - g2, p2.y], pl.rail);
+        }
+      }
+    } else if (coaster && p1.w > 2){
+      // 三条过山车轨道：每条两根彩色钢管
+      for (const lane of LANES) for (const rl of [-0.12, 0.12]){
+        const lx = lane + rl, g1 = p1.w * 0.026, g2 = p2.w * 0.026;
+        poly([p1.x + lx * p1.w - g1, p1.y, p1.x + lx * p1.w + g1, p1.y, p2.x + lx * p2.w + g2, p2.y, p2.x + lx * p2.w - g2, p2.y], pl.rumble);
+      }
+    } else if (stripe){
+      for (const lx of [-0.31, 0.31]){
+        const l1 = p1.w * 0.018, l2 = p2.w * 0.018;
+        poly([p1.x + lx * p1.w - l1, p1.y, p1.x + lx * p1.w + l1, p1.y, p2.x + lx * p2.w + l2, p2.y, p2.x + lx * p2.w - l2, p2.y], 'rgba(255,255,255,.75)');
+      }
+    }
+    if (opts.fence && !seg.tunnel && !seg.glass){
+      const fh1 = p1.s * FENCE_H * yF, fh2 = p2.s * FENCE_H * yF, rt1 = fh1 * 0.2, rt2 = fh2 * 0.2;
+      for (const side of [-1, 1]){
+        const xa = p1.x + side * p1.w, xb = p2.x + side * p2.w;
+        poly([xa, p1.y - fh1 * 0.45, xb, p2.y - fh2 * 0.45, xb, p2.y - fh2 * 0.45 + rt2 * 0.8, xa, p1.y - fh1 * 0.45 + rt1 * 0.8], pl.white);
+        if (seg.i % 4 === 0){
+          const pw = Math.max(1, p1.s * 80 * xF);
+          ctx.fillStyle = pl.white; ctx.fillRect(xa - pw / 2, p1.y - fh1, pw, fh1);
+        }
+        poly([xa, p1.y - fh1, xb, p2.y - fh2, xb, p2.y - fh2 + rt2, xa, p1.y - fh1 + rt1], pl.rumble);
+      }
+    }
+    if (seg.glass){
+      // 海底玻璃隧道：半圆形的透明玻璃管，每隔几节一道白色的骨架
+      const gr1 = p1.w * 1.25, gr2 = p2.w * 1.25, gh1 = p1.s * TUBE_H * yF, gh2 = p2.s * TUBE_H * yF;
+      const arcPts = (p, gr, gh) => { const a = []; for (let k = 0; k <= 12; k++){ const t = Math.PI + Math.PI * k / 12; a.push(p.x + Math.cos(t) * gr, p.y + Math.sin(t) * gh); } return a; };
+      const A = arcPts(p1, gr1, gh1), B = arcPts(p2, gr2, gh2), band = [...A];
+      for (let k = B.length - 2; k >= 0; k -= 2) band.push(B[k], B[k + 1]);
+      poly(band, under ? 'rgba(186,230,253,.10)' : 'rgba(125,211,252,.22)');
+      if (seg.i % 5 === 0){
+        ctx.strokeStyle = under ? 'rgba(255,255,255,.6)' : 'rgba(224,242,254,.45)'; ctx.lineWidth = Math.max(1, p1.w * 0.035);
+        ctx.beginPath(); ctx.moveTo(A[0], A[1]); for (let k = 2; k < A.length; k += 2) ctx.lineTo(A[k], A[k + 1]); ctx.stroke();
+      }
+      if ((seg.y1 >= seaY) !== (seg.y2 >= seaY)){   // 管子钻进海面的地方：一圈白浪花
+        ctx.fillStyle = 'rgba(255,255,255,.85)';
+        ctx.beginPath(); ctx.ellipse(p1.x, yH - p1.s * (seaY - camY) * yF, p1.w * 1.7, Math.max(1.5, p1.s * 160 * yF), 0, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    if (seg.tunnel){
+      // 隧道：两边人行道 + 墙 + 天花板，墙上有彩色腰线，顶上一盏盏灯
+      const th1 = p1.s * TUN_H * yF, th2 = p2.s * TUN_H * yF, w1 = p1.w * 1.18, w2 = p2.w * 1.18;
+      const band = Math.floor(seg.i / 4) % 2;
+      poly([p1.x - w1, p1.y, p1.x - p1.w, p1.y, p2.x - p2.w, p2.y, p2.x - w2, p2.y], tun.walk);
+      poly([p1.x + p1.w, p1.y, p1.x + w1, p1.y, p2.x + w2, p2.y, p2.x + p2.w, p2.y], tun.walk);
+      poly([p1.x - w1, p1.y, p2.x - w2, p2.y, p2.x - w2, p2.y - th2, p1.x - w1, p1.y - th1], band ? tun.wallA : tun.wallB);
+      poly([p1.x + w1, p1.y, p2.x + w2, p2.y, p2.x + w2, p2.y - th2, p1.x + w1, p1.y - th1], band ? tun.wallB : tun.wallA);
+      poly([p1.x - w1, p1.y - th1, p1.x + w1, p1.y - th1, p2.x + w2, p2.y - th2, p2.x - w2, p2.y - th2], tun.ceil);
+      for (const sd of [-1, 1]){ const a = p1.x + sd * w1, b = p2.x + sd * w2; poly([a, p1.y - th1 * 0.34, b, p2.y - th2 * 0.34, b, p2.y - th2 * 0.25, a, p1.y - th1 * 0.25], pal.rumble); }
+      if (seg.i % 6 === 0){ const l1 = w1 * 0.12, l2 = w2 * 0.12; poly([p1.x - l1, p1.y - th1, p1.x + l1, p1.y - th1, p2.x + l2, p2.y - th2, p2.x - l2, p2.y - th2], '#FDE68A'); }
+      if (seg.portal) drawPortal(p1, th1, rail ? yH - p1.s * (seaY - camY) * yF : 0);
+    }
+    ctx.globalAlpha = 1;
+    for (const row of rows){
+      if (n < nBall || Math.floor(row.z / SEG) - Math.floor(dist / SEG) !== n) continue;   // 球已经滚过去的那排不再画
+      const pct = (row.z % SEG) / SEG;
+      const sx = p1.x + (p2.x - p1.x) * pct, sy = p1.y + (p2.y - p1.y) * pct, s = p1.s + (p2.s - p1.s) * pct, sw = p1.w + (p2.w - p1.w) * pct;
+      const appear = Math.min(1, (now - row.born) / 450);
+      if (row.finish) drawFinish(sx, sy, sw, s, 1 - fog);
+      for (const it of row.items) drawItem(it, sx + it.lane * sw, sy, s * ITEMR * xF * (0.6 + 0.4 * appear), (1 - fog) * appear, now);
+    }
+    if (n === nBall) drawBallAt(p1, p2, ballPct, now);
+  }
+  // 粒子
+  const pdt = 1 / 60;
+  for (let i = particles.length - 1; i >= 0; i--){
+    const q = particles[i];
+    if (!game.paused){ q.life -= pdt; q.vy += 600 * pdt; q.x += q.vx * pdt; q.y += q.vy * pdt; q.r += pdt * 8; }
+    if (q.life <= 0){ particles.splice(i, 1); continue; }
+    ctx.globalAlpha = Math.min(1, q.life * 1.6);
+    ctx.save(); ctx.translate(q.x, q.y); ctx.rotate(q.r); ctx.fillStyle = q.c; ctx.fillRect(-q.s / 2, -q.s / 4, q.s, q.s / 2); ctx.restore();
+  }
+  ctx.globalAlpha = 1;
+  drawWeather(dt);
+}
+
+// 隧道口：一座漂在天上的小山，中间挖一个拱门
+function drawPortal(p, th, seaBottom = 0){
+  const x = p.x, y = p.y, w = p.w * 1.18, sl = Math.max(p.s * THICK * yF, seaBottom - y);   // 铁路世界：山脚一直伸到海里
+  ctx.beginPath();
+  ctx.moveTo(x - w * 3.6, y + sl);
+  for (const [a, b] of [[-3.3, .9], [-2.4, 1.7], [-1.2, 2.25], [0.2, 2.6], [1.5, 2.05], [2.6, 1.6], [3.5, .7]]) ctx.lineTo(x + a * w, y - b * th);
+  ctx.lineTo(x + w * 3.4, y + sl); ctx.closePath();
+  ctx.moveTo(x - w, y); ctx.lineTo(x + w, y); ctx.lineTo(x + w, y - th * 0.62); ctx.ellipse(x, y - th * 0.62, w, th * 0.38, 0, 0, Math.PI, true); ctx.closePath();
+  ctx.fillStyle = tun.rock; ctx.fill('evenodd');
+  ctx.fillStyle = tun.cap;   // 山顶：下雪天是白雪，平时是绿草
+  ctx.beginPath();
+  for (const [a, b] of [[-1.75, 1.95], [-1.2, 2.25], [0.2, 2.6], [1.5, 2.05], [1.0, 1.85], [0.4, 2.05], [-0.5, 1.8]]) ctx.lineTo(x + a * w, y - b * th);
+  ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = tun.arch; ctx.lineWidth = Math.max(2, w * 0.12);
+  ctx.beginPath(); ctx.moveTo(x - w, y); ctx.lineTo(x - w, y - th * 0.62); ctx.ellipse(x, y - th * 0.62, w, th * 0.38, 0, Math.PI, 0); ctx.lineTo(x + w, y); ctx.stroke();
+}
+
+// 过山车世界：路边转动的摩天轮、大圆环
+function drawCoasterDeco(p, d, now){
+  const x = p.x + d.side * p.w * d.off, R = p.s * 2400 * xF * d.k;
+  if (R < 3) return;
+  const cy = p.y - R * 0.55;
+  ctx.lineCap = 'round';
+  // 支架
+  ctx.strokeStyle = pal.side2; ctx.lineWidth = Math.max(1, R * 0.06);
+  ctx.beginPath(); ctx.moveTo(x, cy); ctx.lineTo(x - R * 0.55, cy + R * 1.35); ctx.moveTo(x, cy); ctx.lineTo(x + R * 0.55, cy + R * 1.35); ctx.stroke();
+  if (d.type === 'wheel'){
+    const rot = now / 4000 * d.side;
+    ctx.strokeStyle = '#FFFFFF'; ctx.lineWidth = Math.max(1, R * 0.05);
+    ctx.beginPath(); ctx.arc(x, cy, R, 0, Math.PI * 2); ctx.stroke();
+    ctx.lineWidth = Math.max(0.5, R * 0.02);
+    for (let i = 0; i < 8; i++){ const a = rot + i * Math.PI / 4; ctx.beginPath(); ctx.moveTo(x, cy); ctx.lineTo(x + Math.cos(a) * R, cy + Math.sin(a) * R); ctx.stroke(); }
+    for (let i = 0; i < 8; i++){
+      const a = rot + i * Math.PI / 4, gx = x + Math.cos(a) * R, gyy = cy + Math.sin(a) * R;
+      ctx.fillStyle = TOKEN_COLS[i % TOKEN_COLS.length];
+      ctx.beginPath(); ctx.roundRect ? ctx.roundRect(gx - R * 0.11, gyy, R * 0.22, R * 0.2, R * 0.05) : ctx.rect(gx - R * 0.11, gyy, R * 0.22, R * 0.2); ctx.fill();
+    }
+    ctx.fillStyle = '#FACC15'; ctx.beginPath(); ctx.arc(x, cy, R * 0.09, 0, Math.PI * 2); ctx.fill();
+  } else {
+    ctx.strokeStyle = pal.rumble; ctx.lineWidth = Math.max(2, R * 0.16);
+    ctx.beginPath(); ctx.ellipse(x, cy, R * 0.75, R, 0, 0, Math.PI * 2); ctx.stroke();
+    ctx.strokeStyle = '#FFFFFF'; ctx.lineWidth = Math.max(1, R * 0.04);
+    ctx.beginPath(); ctx.ellipse(x, cy, R * 0.75, R, 0, 0, Math.PI * 2); ctx.stroke();
+  }
+}
+
+// 铁路世界：路边从海里冒出来的山
+function drawSideMountain(p, mt, ys){
+  const w = p.w * mt.w * 1.6, h = p.s * 4200 * mt.h * yF, x = p.x + mt.side * p.w * mt.off;
+  if (w < 2) return;
+  ctx.fillStyle = tun.rock;
+  ctx.beginPath(); ctx.moveTo(x - w, ys); ctx.lineTo(x - w * 0.45, ys - h * 0.62); ctx.lineTo(x - w * 0.1, ys - h); ctx.lineTo(x + w * 0.3, ys - h * 0.78); ctx.lineTo(x + w * 0.62, ys - h * 0.5); ctx.lineTo(x + w, ys); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = tun.mtnGreen;
+  ctx.beginPath(); ctx.moveTo(x - w, ys); ctx.lineTo(x - w * 0.45, ys - h * 0.62); ctx.lineTo(x - w * 0.25, ys - h * 0.45); ctx.lineTo(x + w * 0.1, ys - h * 0.55); ctx.lineTo(x + w * 0.62, ys - h * 0.5); ctx.lineTo(x + w, ys); ctx.closePath(); ctx.fill();
+  if (mt.snow || (game.env && game.env.weather === 'snow')){
+    ctx.fillStyle = '#F8FAFC';
+    ctx.beginPath(); ctx.moveTo(x - w * 0.28, ys - h * 0.8); ctx.lineTo(x - w * 0.1, ys - h); ctx.lineTo(x + w * 0.18, ys - h * 0.84); ctx.lineTo(x + w * 0.02, ys - h * 0.88); ctx.closePath(); ctx.fill();
+  }
+}
+
+// 下雨 / 下雪（钻进隧道就停），雨天偶尔打个闪
+let drops = [], flakes = [], flash = 0, tunFade = 0;
+// 海底：鱼游来游去、泡泡往上冒、水草摇
+let fish = [], bubbles = [], underFade = 0;
+const FISH = ['🐟','🐠','🐡','🦈','🐙','🐢','🪼','🦑','🐬','🐳','🦀'];
+function newFish(anyX){
+  const v = (Math.random() < .5 ? -1 : 1) * (25 + Math.random() * 70);
+  return { e:pick(FISH), y:H * (0.12 + Math.random() * 0.62), x:anyX ? Math.random() * W : (v > 0 ? -60 : W + 60), v, s:22 + Math.random() * 30, ph:Math.random() * 6 };
+}
+function drawUnderwater(now, dt){
+  if (!fish.length){ fish = Array.from({ length:12 }, () => newFish(true)); bubbles = Array.from({ length:40 }, () => ({ x:Math.random() * W, y:Math.random() * H, r:1.5 + Math.random() * 4, v:30 + Math.random() * 60 })); }
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, uw.top); g.addColorStop(.55, uw.mid); g.addColorStop(1, uw.bot);
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  const a0 = ctx.globalAlpha;
+  ctx.fillStyle = 'rgba(255,255,255,.07)';   // 从海面照下来的光柱
+  for (let i = 0; i < 5; i++){ const x = W * (0.1 + i * 0.2) + Math.sin(now / 1500 + i) * 40; ctx.beginPath(); ctx.moveTo(x - 30, 0); ctx.lineTo(x + 30, 0); ctx.lineTo(x + 140, H * 0.8); ctx.lineTo(x - 20, H * 0.8); ctx.closePath(); ctx.fill(); }
+  ctx.strokeStyle = 'rgba(224,242,254,.6)'; ctx.lineWidth = 3;   // 头顶的海面波光
+  ctx.beginPath(); for (let x = 0; x <= W; x += 20){ const y = 8 + Math.sin(x / 40 + now / 400) * 5; x ? ctx.lineTo(x, y) : ctx.moveTo(x, y); } ctx.stroke();
+  const sy = H * 0.86;   // 海底沙子 + 水草
+  ctx.fillStyle = uw.sand; ctx.beginPath(); ctx.moveTo(0, H); ctx.lineTo(0, sy); for (let x = 0; x <= W; x += 40) ctx.lineTo(x, sy + Math.sin(x / 90) * 10); ctx.lineTo(W, H); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = uw.weed; ctx.lineWidth = 6; ctx.lineCap = 'round';
+  for (let i = 0; i < 14; i++){ const x = (i * 97.3) % W, h = 50 + (i * 37) % 60; ctx.beginPath(); ctx.moveTo(x, sy + 8); for (let k = 1; k <= 6; k++) ctx.lineTo(x + Math.sin(now / 600 + i + k * 0.8) * 8, sy + 8 - h * k / 6); ctx.stroke(); }
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  for (let i = 0; i < fish.length; i++){
+    const f = fish[i];
+    f.x += f.v * dt; f.ph += dt * 2;
+    if (f.x < -80 || f.x > W + 80) fish[i] = newFish(false);
+    ctx.save(); ctx.translate(f.x, f.y + Math.sin(f.ph) * 6); if (f.v > 0) ctx.scale(-1, 1);
+    ctx.font = `${Math.round(f.s)}px "Apple Color Emoji","Segoe UI Emoji",sans-serif`; ctx.fillStyle = '#000'; ctx.fillText(f.e, 0, 0); ctx.restore();
+  }
+  ctx.strokeStyle = 'rgba(255,255,255,.6)'; ctx.lineWidth = 1.2;
+  for (const b of bubbles){ b.y -= b.v * dt; b.x += Math.sin(now / 500 + b.r) * 0.3; if (b.y < -10){ b.y = H + 10; b.x = Math.random() * W; } ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2); ctx.stroke(); }
+  ctx.globalAlpha = a0;
+}
+function initWeather(){
+  drops = Array.from({ length:160 }, () => ({ x:Math.random() * W, y:Math.random() * H, v:900 + Math.random() * 500 }));
+  flakes = Array.from({ length:120 }, () => ({ x:Math.random() * W, y:Math.random() * H, v:40 + Math.random() * 70, r:1.5 + Math.random() * 2.5, ph:Math.random() * 6 }));
+}
+function drawWeather(dt){
+  const env = game.env; if (!env) return;
+  const inT = segs.length && (segAt(dist + 300).tunnel || (game.mode && game.mode.world === 'rail' && camY < seaY)) ? 1 : 0;   // 隧道里、海底都不下雨雪
+  tunFade += (inT - tunFade) * Math.min(1, dt * 4);
+  const vis = 1 - tunFade;
+  if (env.weather === 'rain' && vis > 0.02){
+    ctx.strokeStyle = env.time === 'night' ? `rgba(165,180,252,${.5 * vis})` : `rgba(241,245,249,${.65 * vis})`; ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    for (const d of drops){
+      d.y += d.v * dt; d.x -= d.v * 0.12 * dt;
+      if (d.y > H){ d.y = -20 - Math.random() * 40; d.x = Math.random() * (W + 100); }
+      if (d.x < -20) d.x += W + 40;
+      ctx.moveTo(d.x, d.y); ctx.lineTo(d.x + d.v * 0.012, d.y - d.v * 0.03);
+    }
+    ctx.stroke();
+    if (game.state === 'play' && Math.random() < dt * 0.05){ flash = 1; setTimeout(() => amb(55, 1.2, 'sawtooth', 0.04, 30), 350); }
+  }
+  if (env.weather === 'snow' && vis > 0.02){
+    ctx.fillStyle = `rgba(255,255,255,${.9 * vis})`;
+    for (const f of flakes){
+      f.y += f.v * dt; f.ph += dt * 1.5; f.x += Math.sin(f.ph) * 20 * dt;
+      if (f.y > H){ f.y = -10; f.x = Math.random() * W; }
+      ctx.beginPath(); ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  if (flash > 0){ ctx.fillStyle = `rgba(255,255,255,${flash * 0.4 * vis})`; ctx.fillRect(0, 0, W, H); flash = Math.max(0, flash - dt * 3); }
+}
+
+function drawBallAt(p1, p2, pct, now){
+  const s = p1.s + (p2.s - p1.s) * pct;
+  const cx = p1.x + (p2.x - p1.x) * pct, cy = p1.y + (p2.y - p1.y) * pct, w = p1.w + (p2.w - p1.w) * pct;
+  const r = s * BALLR * xF;
+  let bx = cx + ball.x * w, by = cy - r - ball.hop * r;
+  let rr = r;
+  if (ball.falling){ const t = ball.fallT; by += t * t * H * 0.9; rr = r * Math.max(0.2, 1 - t * 0.6); }
+  else {
+    ctx.fillStyle = 'rgba(30,20,60,.25)';
+    const sw = game.mode && game.mode.donut ? 1.6 : game.mode && game.mode.ball === 'train' ? 1.25 : 0.9;
+    ctx.beginPath(); ctx.ellipse(bx, cy - r * 0.05, r * sw / (1 + ball.hop), r * 0.28 / (1 + ball.hop), 0, 0, Math.PI * 2); ctx.fill();
+  }
+  if (game.env && game.env.time === 'night' && !ball.falling){
+    const lg = ctx.createRadialGradient(bx, cy - r * 1.6, r * 0.2, bx, cy - r * 1.6, r * 3);
+    lg.addColorStop(0, 'rgba(254,240,138,.35)'); lg.addColorStop(1, 'rgba(254,240,138,0)');
+    ctx.fillStyle = lg; ctx.beginPath(); ctx.ellipse(bx, cy - r * 1.6, r * 3, r * 1.4, 0, 0, Math.PI * 2); ctx.fill();
+  }
+  if (ball.inv > 0 && Math.floor(now / 90) % 2) ctx.globalAlpha = 0.45;
+  const kind = game.mode ? (game.mode.ball || 'beach') : 'beach', donut = game.mode && game.mode.donut;
+  if (donut) drawDonut(bx, by, rr, ball.phase, false);
+  if (kind === 'pool') drawPool(bx, by, rr, ball.phase);
+  else if (kind === 'letters') drawLetters(bx, by, rr, ball.phase);
+  else if (kind === 'hanzi') drawHanziBall(bx, by, rr, ball.phase);
+  else if (kind === 'mouse') drawMouseBall(bx, by, rr, ball.phase, now);
+  else if (kind === 'melon') drawMelon(bx, by, rr, ball.phase);
+  else if (kind === 'hedgehog') drawHedgehog(bx, by, rr, ball.phase);
+  else if (kind === 'train') drawTrain(bx, by, rr, ball.phase, now);
+  else drawBall(bx, by, rr, ball.phase, ball.x * 0.6);
+  if (donut) drawDonut(bx, by, rr, ball.phase, true);
+  ctx.globalAlpha = 1;
+  ballScreen = { x:bx, y:by, r:rr };
+}
+let ballScreen = { x:0, y:0, r:0 };
+
+/* 糖果模式：小球腰上套着一个草莓巧克力甜甜圈。
+   先画后半圈（在球后面），再画球，再画前半圈（挡在球前面），看起来就是球「穿」在甜甜圈里 */
+const SPRINKLES = ['#FDE047','#60A5FA','#FFFFFF','#34D399','#A78BFA','#FB923C'];
+function drawDonut(x, y, r, phase, front){
+  const cy = y + r * 0.12, rx = r * 1.42, ry = r * 0.5, tube = r * 0.62;
+  const a0 = front ? 0 : Math.PI, a1 = front ? Math.PI : Math.PI * 2;
+  const arc = (dy, lw, col, sx = 1) => { ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.beginPath(); ctx.ellipse(x, cy + dy, rx * sx, ry * sx, 0, a0, a1); ctx.stroke(); };
+  ctx.save();
+  ctx.lineCap = 'butt';                             // 前后两半在左右两侧对接，用平头才不会鼓包
+  arc(tube * 0.12, tube, '#B7793F');                 // 面团底色（下沿的烤色）
+  arc(0, tube * 0.92, '#E9B26E');                    // 面团
+  arc(-tube * 0.1, tube * 0.72, '#F472B6');          // 草莓糖霜
+  arc(-tube * 0.2, tube * 0.28, '#F9A8D4');          // 糖霜高光
+  // 巧克力淋酱：沿着圈来回波动的一条深棕色线
+  ctx.strokeStyle = '#5B3418'; ctx.lineWidth = Math.max(1.5, tube * 0.16);
+  ctx.beginPath();
+  for (let i = 0; i <= 48; i++){
+    const a = a0 + (a1 - a0) * i / 48, w = Math.sin(a * 11) * tube * 0.24;
+    const px = x + Math.cos(a) * (rx + w), py = cy - tube * 0.12 + Math.sin(a) * (ry + w * 0.35);
+    i ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+  }
+  ctx.stroke();
+  // 彩色糖针，跟着球慢慢转
+  const n = 22, spin = phase * 0.08;
+  ctx.lineWidth = Math.max(1.2, tube * 0.11); ctx.lineCap = 'round';
+  for (let i = 0; i < n; i++){
+    const a = (i / n) * Math.PI * 2 + spin, s = Math.sin(a);
+    if (front ? s < 0 : s >= 0) continue;
+    const off = ((i * 7) % 5 - 2) / 2 * tube * 0.22;
+    const px = x + Math.cos(a) * (rx + off), py = cy - tube * 0.14 + s * (ry + off * 0.35);
+    const ang = a + i * 1.3, len = tube * 0.2;
+    ctx.strokeStyle = SPRINKLES[i % SPRINKLES.length];
+    ctx.beginPath(); ctx.moveTo(px - Math.cos(ang) * len / 2, py - Math.sin(ang) * len / 4); ctx.lineTo(px + Math.cos(ang) * len / 2, py + Math.sin(ang) * len / 4); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawBall(x, y, r, phase, tilt){
+  const mc = game.mode ? game.mode.color : '#3B82F6';
+  ctx.save();
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.clip();
+  ctx.fillStyle = '#FFFFFF'; ctx.fillRect(x - r, y - r, 2 * r, 2 * r);
+  ctx.translate(x, y); ctx.rotate(tilt * 0.4);
+  // 绕横轴滚动的两条彩带（相差 90°），让小球看起来在往前滚
+  for (const [o, col] of [[0, mc], [Math.PI / 2, '#FACC15']]){
+    const a = -phase + o, ry = Math.abs(Math.cos(a)) * r, upper = Math.sin(a) * Math.cos(a) > 0;
+    ctx.strokeStyle = col; ctx.lineWidth = r * 0.3;
+    ctx.beginPath(); ctx.ellipse(0, 0, r, Math.max(0.5, ry), 0, upper ? Math.PI : 0, upper ? Math.PI * 2 : Math.PI); ctx.stroke();
+  }
+  ctx.fillStyle = '#F472B6'; ctx.fillRect(-r * 0.13, -r, r * 0.26, 2 * r);
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  const g = ctx.createRadialGradient(x - r * .35, y - r * .45, r * .08, x, y, r * 1.05);
+  g.addColorStop(0, 'rgba(255,255,255,.85)'); g.addColorStop(.35, 'rgba(255,255,255,.1)'); g.addColorStop(1, 'rgba(20,10,60,.45)');
+  ctx.fillStyle = g; ctx.fillRect(x - r, y - r, 2 * r, 2 * r);
+  ctx.restore();
+}
+
+/* ---------- 每个模式自己的球 ----------
+   球面上的图案用「贴花」：p 是球面上的单位向量（x 右、y 上、z 朝镜头），
+   绕横轴转 phase（往前滚时，朝我们这面的图案往上走），再投影到屏幕；z<=0 就是转到背面去了 */
+function spherePt(p, phase, x, y, r){
+  const c = Math.cos(phase), s = Math.sin(phase);
+  return { x:x + p[0] * r, y:y - (p[1] * c + p[2] * s) * r, z:-p[1] * s + p[2] * c };
+}
+function shade(x, y, r, k = 1){
+  const g = ctx.createRadialGradient(x - r * .35, y - r * .45, r * .08, x, y, r * 1.05);
+  g.addColorStop(0, `rgba(255,255,255,${.8 * k})`); g.addColorStop(.35, 'rgba(255,255,255,.08)'); g.addColorStop(1, `rgba(20,10,60,${.45 * k})`);
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+}
+function clipBall(x, y, r, fill){ ctx.save(); ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.clip(); ctx.fillStyle = fill; ctx.fillRect(x - r, y - r, 2 * r, 2 * r); }
+// 一条经过左右两极的大圆（wob 让它弯弯曲曲，像西瓜纹）
+function greatCircle(x, y, r, phase, a, wob, col, lw){
+  ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.lineJoin = 'round'; ctx.beginPath();
+  let pen = false;
+  for (let i = 0; i <= 72; i++){
+    const th = i / 72 * Math.PI * 2, aa = a + wob * Math.sin(th * 7);
+    const q = spherePt([Math.cos(th), Math.sin(th) * Math.cos(aa), Math.sin(th) * Math.sin(aa)], phase, x, y, r);
+    if (q.z > 0){ pen ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y); pen = true; } else pen = false;
+  }
+  ctx.stroke();
+}
+const FIB = Array.from({ length:64 }, (_, i) => { const yy = 1 - (i + .5) / 32, rr = Math.sqrt(1 - yy * yy), a = i * 2.39996; return [Math.cos(a) * rr, yy, Math.sin(a) * rr]; });
+const CUBE14 = [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]].concat([-1, 1].flatMap(a => [-1, 1].flatMap(b => [-1, 1].map(c => [a, b, c].map(v => v / Math.sqrt(3))))));
+
+// 数字模式：台球，白圈里写着下一个要撞的数字（正反两面都有，滚起来一闪一闪）
+const POOL = ['#FACC15','#2563EB','#DC2626','#7C3AED','#F97316','#16A34A','#9F1239','#111827'];
+function drawPool(x, y, r, phase){
+  const t = game.seq ? game.seq[Math.min(game.got.length, game.seq.length - 1)] : { label:'8' };
+  clipBall(x, y, r, POOL[(+t.label - 1) % POOL.length]);
+  for (const p of [[0, 0, 1], [0, 0, -1]]){
+    const q = spherePt(p, phase, x, y, r);
+    if (q.z <= 0.04) continue;
+    ctx.save(); ctx.translate(q.x, q.y); ctx.scale(1, q.z);
+    ctx.fillStyle = '#FFFFFF'; ctx.beginPath(); ctx.arc(0, 0, r * 0.46, 0, Math.PI * 2); ctx.fill();
+    const txt = t.q || t.label;
+    ctx.fillStyle = '#111827'; ctx.font = `900 ${Math.round(r * (txt.length > 3 ? 1.5 / txt.length : txt.length > 1 ? 0.48 : 0.6))}px system-ui,-apple-system,sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(txt, 0, r * 0.03);
+    ctx.restore();
+  }
+  shade(x, y, r); ctx.restore();
+}
+
+// 火车模式：从后面看的小火车头——车窗里有司机，烟囱冒烟，轮子转，车尾挂着「佑佑号」
+let smoke = [], smokeT = 0;
+const trainHorn = () => { amb(370, .45, 'square', .05); amb(294, .7, 'square', .05, 0, .45); };
+function drawTrain(x, y, r, phase, now){
+  const k = r;
+  const dts = game.paused ? 0 : Math.min(0.05, (now - smokeT) / 1000); smokeT = now;
+  const rr = (x0, y0, w, h, rad, col) => { ctx.fillStyle = col; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x0, y0, w, h, rad) : ctx.rect(x0, y0, w, h); ctx.fill(); };
+  const circ = (cx, cy, rad, col) => { ctx.fillStyle = col; ctx.beginPath(); ctx.arc(cx, cy, rad, 0, Math.PI * 2); ctx.fill(); };
+  // 烟囱（在车顶后面）
+  rr(x - 0.14 * k, y - 1.12 * k, 0.28 * k, 0.45 * k, 0.04 * k, '#374151');
+  rr(x - 0.2 * k, y - 1.18 * k, 0.4 * k, 0.12 * k, 0.05 * k, '#111827');
+  // 轮子
+  for (const sx of [-1, 1]){
+    const wx = x + sx * 0.7 * k, wy = y + 0.8 * k, wr = 0.25 * k;
+    circ(wx, wy, wr, '#1F2937');
+    ctx.strokeStyle = '#9CA3AF'; ctx.lineWidth = Math.max(1, k * 0.045);
+    for (let j = 0; j < 3; j++){ const a = phase + j * Math.PI / 3; ctx.beginPath(); ctx.moveTo(wx - Math.cos(a) * wr * 0.8, wy - Math.sin(a) * wr * 0.8); ctx.lineTo(wx + Math.cos(a) * wr * 0.8, wy + Math.sin(a) * wr * 0.8); ctx.stroke(); }
+    circ(wx, wy, wr * 0.28, '#D1D5DB');
+  }
+  // 车身
+  const g = ctx.createLinearGradient(0, y - 0.6 * k, 0, y + 0.8 * k);
+  g.addColorStop(0, '#F87171'); g.addColorStop(1, '#B91C1C');
+  rr(x - 0.95 * k, y - 0.58 * k, 1.9 * k, 1.36 * k, 0.18 * k, g);
+  ctx.fillStyle = '#FACC15'; ctx.fillRect(x - 0.95 * k, y + 0.2 * k, 1.9 * k, 0.12 * k);
+  rr(x - 1.03 * k, y - 0.8 * k, 2.06 * k, 0.3 * k, 0.12 * k, '#7F1D1D');   // 车顶
+  // 后窗 + 司机的后脑勺和帽子
+  rr(x - 0.56 * k, y - 0.44 * k, 1.12 * k, 0.54 * k, 0.1 * k, '#BAE6FD');
+  circ(x, y - 0.06 * k, 0.21 * k, '#3F2A1E');
+  ctx.fillStyle = '#1D4ED8'; ctx.beginPath(); ctx.arc(x, y - 0.13 * k, 0.22 * k, Math.PI, 0); ctx.fill();
+  ctx.fillRect(x - 0.28 * k, y - 0.15 * k, 0.56 * k, 0.05 * k);
+  ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.fillRect(x - 0.5 * k, y - 0.4 * k, 0.12 * k, 0.4 * k);
+  // 尾灯（晚上发光）
+  const night = game.env && game.env.time === 'night';
+  for (const sx of [-1, 1]){
+    if (night){ const lg = ctx.createRadialGradient(x + sx * 0.76 * k, y + 0.52 * k, 0, x + sx * 0.76 * k, y + 0.52 * k, 0.4 * k); lg.addColorStop(0, 'rgba(248,113,113,.7)'); lg.addColorStop(1, 'rgba(248,113,113,0)'); ctx.fillStyle = lg; ctx.beginPath(); ctx.arc(x + sx * 0.76 * k, y + 0.52 * k, 0.4 * k, 0, Math.PI * 2); ctx.fill(); }
+    circ(x + sx * 0.76 * k, y + 0.52 * k, 0.09 * k, night ? '#FEE2E2' : '#FCA5A5');
+  }
+  // 车牌
+  rr(x - 0.4 * k, y + 0.42 * k, 0.8 * k, 0.26 * k, 0.06 * k, '#FFFFFF');
+  ctx.fillStyle = '#B91C1C'; ctx.font = `900 ${Math.max(8, Math.round(0.18 * k))}px system-ui,-apple-system,sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('佑佑号', x, y + 0.555 * k);
+  ctx.fillStyle = '#111827'; ctx.fillRect(x - 0.98 * k, y + 0.74 * k, 1.96 * k, 0.08 * k);   // 缓冲梁
+  // 烟：从烟囱冒出来，越飘越大、越淡
+  if (game.state === 'play' && speed > 200 && Math.random() < dts * 7) smoke.push({ dx:(Math.random() - .5) * 0.1, dy:-1.2, r:0.16, life:1, vx:(Math.random() - .5) * 0.7 });
+  for (let i = smoke.length - 1; i >= 0; i--){
+    const p = smoke[i];
+    p.dy -= 0.6 * dts; p.dx += p.vx * dts; p.r += 0.28 * dts; p.life -= 1.15 * dts;
+    if (p.life <= 0){ smoke.splice(i, 1); continue; }
+    ctx.fillStyle = night ? `rgba(203,213,225,${0.45 * p.life})` : `rgba(255,255,255,${0.6 * p.life})`;
+    ctx.beginPath(); ctx.arc(x + p.dx * k, y + p.dy * k, p.r * k, 0, Math.PI * 2); ctx.fill();
+  }
+}
+
+// 汉字模式：红灯笼球，正反两面贴着田字格，格子里是现在要找的字
+function drawHanziBall(x, y, r, phase){
+  const t = game.seq ? game.seq[Math.min(game.got.length, game.seq.length - 1)] : { label:'字' };
+  const g = ctx.createRadialGradient(x - r * .3, y - r * .3, r * .1, x, y, r);
+  g.addColorStop(0, '#F87171'); g.addColorStop(1, '#B91C1C');
+  clipBall(x, y, r, g);
+  for (let k = 0; k < 6; k++) greatCircle(x, y, r, phase, k * Math.PI / 6, 0, 'rgba(253,224,71,.5)', r * 0.05);
+  for (const p of [[0, 0, 1], [0, 0, -1]]){
+    const q = spherePt(p, phase, x, y, r);
+    if (q.z <= 0.04) continue;
+    const h = r * 0.5;
+    ctx.save(); ctx.translate(q.x, q.y); ctx.scale(1, q.z);
+    ctx.fillStyle = '#FFFBEB'; ctx.fillRect(-h, -h, 2 * h, 2 * h);
+    ctx.strokeStyle = '#DC2626'; ctx.lineWidth = r * 0.05; ctx.strokeRect(-h, -h, 2 * h, 2 * h);
+    ctx.setLineDash([r * 0.06, r * 0.05]); ctx.lineWidth = r * 0.02;
+    ctx.beginPath(); ctx.moveTo(-h, 0); ctx.lineTo(h, 0); ctx.moveTo(0, -h); ctx.lineTo(0, h); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#111827'; ctx.font = `700 ${Math.round(r * 0.78)}px "Kaiti SC","STKaiti","KaiTi",serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(t.label, 0, r * 0.04);
+    ctx.restore();
+  }
+  shade(x, y, r, 0.8); ctx.restore();
+}
+
+// 字母模式：奶油色的球，上面印满这一关的彩色字母
+function drawLetters(x, y, r, phase){
+  const L = game.seq ? game.seq.map(i => i.label) : LETTERS.slice(0, 10);
+  clipBall(x, y, r, '#FFF7ED');
+  const pts = CUBE14.map((p, i) => ({ q:spherePt(p, phase, x, y, r), i })).filter(o => o.q.z > 0.05).sort((a, b) => a.q.z - b.q.z);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  for (const { q, i } of pts){
+    ctx.save(); ctx.translate(q.x, q.y); ctx.scale(1, Math.max(0.2, q.z));
+    ctx.globalAlpha = Math.min(1, q.z * 2.5);
+    ctx.font = `900 ${Math.round(r * 0.5)}px system-ui,-apple-system,sans-serif`;
+    ctx.fillStyle = TOKEN_COLS[i % TOKEN_COLS.length]; ctx.fillText(L[i % L.length], 0, 0);
+    ctx.restore();
+  }
+  shade(x, y, r); ctx.restore();
+}
+
+// 水果模式：滚动的大西瓜
+function drawMelon(x, y, r, phase){
+  const g = ctx.createRadialGradient(x - r * .3, y - r * .3, r * .1, x, y, r);
+  g.addColorStop(0, '#86EFAC'); g.addColorStop(1, '#16A34A');
+  clipBall(x, y, r, g);
+  for (let k = 0; k < 8; k++) greatCircle(x, y, r, phase, k * Math.PI / 8, 0.09, '#14532D', r * 0.13);
+  shade(x, y, r, 0.8); ctx.restore();
+}
+
+// 动物模式：缩成一团的小刺猬，滚的时候小脸会转出来
+function drawHedgehog(x, y, r, phase){
+  // 外圈的刺
+  ctx.fillStyle = '#5B3410';
+  const N = 30;
+  for (let k = 0; k < N; k++){
+    const a = k / N * Math.PI * 2, len = r * (0.2 + 0.06 * Math.sin(k * 2.7 + phase * 3)), w = Math.PI / N * 0.9;
+    ctx.beginPath();
+    ctx.moveTo(x + Math.cos(a - w) * r * 0.92, y + Math.sin(a - w) * r * 0.92);
+    ctx.lineTo(x + Math.cos(a) * (r + len), y + Math.sin(a) * (r + len));
+    ctx.lineTo(x + Math.cos(a + w) * r * 0.92, y + Math.sin(a + w) * r * 0.92);
+    ctx.fill();
+  }
+  const g = ctx.createRadialGradient(x - r * .3, y - r * .3, r * .1, x, y, r);
+  g.addColorStop(0, '#B7793F'); g.addColorStop(1, '#6B3E15');
+  clipBall(x, y, r, g);
+  // 身上的小刺
+  ctx.lineCap = 'round';
+  for (const p of FIB){
+    const q = spherePt(p, phase, x, y, r);
+    if (q.z <= 0.05) continue;
+    const dx = q.x - x, dy = q.y - y, len = r * 0.16;
+    const d = Math.hypot(dx, dy) || 1;
+    ctx.strokeStyle = '#3B1F08'; ctx.lineWidth = r * 0.07;
+    ctx.beginPath(); ctx.moveTo(q.x, q.y); ctx.lineTo(q.x + dx / d * len * (1 - q.z * .6) + 0.01, q.y + dy / d * len * (1 - q.z * .6) - len * q.z * .5); ctx.stroke();
+  }
+  // 小脸
+  const f = spherePt([0, 0, 1], phase, x, y, r);
+  if (f.z > 0.15){
+    ctx.save(); ctx.translate(f.x, f.y); ctx.scale(1, f.z);
+    ctx.fillStyle = '#F5D0A9'; ctx.beginPath(); ctx.ellipse(0, 0, r * 0.5, r * 0.42, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#1F2937';
+    for (const sx of [-1, 1]){ ctx.beginPath(); ctx.arc(sx * r * 0.18, -r * 0.08, r * 0.07, 0, Math.PI * 2); ctx.fill(); }
+    ctx.beginPath(); ctx.arc(0, r * 0.1, r * 0.08, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(244,114,182,.7)';
+    for (const sx of [-1, 1]){ ctx.beginPath(); ctx.arc(sx * r * 0.32, r * 0.08, r * 0.07, 0, Math.PI * 2); ctx.fill(); }
+    ctx.fillStyle = '#FFFFFF';
+    for (const sx of [-1, 1]){ ctx.beginPath(); ctx.arc(sx * r * 0.18 + r * 0.025, -r * 0.1, r * 0.022, 0, Math.PI * 2); ctx.fill(); }
+    ctx.restore();
+  }
+  shade(x, y, r, 0.7); ctx.restore();
+}
+
+// 蔬菜模式：透明仓鼠球里跑着一只小老鼠。撞到蔬菜，蔬菜飞进它嘴里，咔嚓咔嚓吃掉
+function drawMouseBall(x, y, r, phase, now){
+  // 玻璃球后半边 + 滚动的环
+  ctx.save();
+  ctx.fillStyle = 'rgba(191,219,254,.35)'; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.clip();
+  for (let k = 0; k < 3; k++) greatCircle(x, y, r, phase, k * Math.PI / 3, 0, 'rgba(255,255,255,.35)', r * 0.04);
+  ctx.restore();
+
+  const e = game.eat, et = e ? (now - e.t0) / 1000 : 99;
+  if (e && et > 1.35) game.eat = null;
+  const eating = et < 1.35;
+  const bite = et > 0.3 ? Math.min(3, Math.floor((et - 0.3) / 0.3) + 1) : 0;
+  if (e && bite > e.bites){   // 每咬一口：咔嚓声 + 菜渣
+    e.bites = bite; amb(180 + bite * 40, .06, 'square', .07);
+    for (let i = 0; i < 8; i++) particles.push({ x, y:y - r * 0.05, vx:(Math.random() - .5) * 260, vy:-Math.random() * 200, life:.6, c:pick(['#22C55E','#86EFAC','#F97316']), s:3 + Math.random() * 3, r:0 });
+  }
+  const chew = eating && et > 0.3 ? Math.abs(Math.sin((et - 0.3) * Math.PI / 0.3 * 2)) : 0;
+  const yuck = now - (game.yuck || 0) < 900;
+  const k = r * 0.86, ox = x, oy = y + r * 0.06;
+  const P = (a, b) => [ox + a * k, oy + b * k];
+  const circ = (a, b, rad, col) => { const [px, py] = P(a, b); ctx.fillStyle = col; ctx.beginPath(); ctx.arc(px, py, rad * k, 0, Math.PI * 2); ctx.fill(); };
+  const ell = (a, b, rx, ry, col) => { const [px, py] = P(a, b); ctx.fillStyle = col; ctx.beginPath(); ctx.ellipse(px, py, rx * k, ry * k, 0, 0, Math.PI * 2); ctx.fill(); };
+  const run = Math.sin(phase * 1.5);
+  // 尾巴
+  ctx.strokeStyle = '#F9A8D4'; ctx.lineWidth = k * 0.05; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(...P(0.28, 0.62)); ctx.bezierCurveTo(...P(0.7, 0.75), ...P(0.75, 0.3), ...P(0.55, 0.2)); ctx.stroke();
+  // 脚（跑步）
+  ell(-0.2, 0.84 + run * 0.05, 0.13, 0.07, '#F9A8D4'); ell(0.2, 0.84 - run * 0.05, 0.13, 0.07, '#F9A8D4');
+  // 身体
+  ell(0, 0.46, 0.38, 0.38, '#9CA3AF'); ell(0, 0.52, 0.24, 0.26, '#E5E7EB');
+  // 头、耳朵
+  circ(-0.33, -0.44, 0.21, '#9CA3AF'); circ(0.33, -0.44, 0.21, '#9CA3AF');
+  circ(-0.33, -0.44, 0.13, '#FBCFE8'); circ(0.33, -0.44, 0.13, '#FBCFE8');
+  circ(0, -0.1, 0.37, '#A3A9B4');
+  // 眼睛
+  if (yuck){
+    ctx.strokeStyle = '#111827'; ctx.lineWidth = k * 0.045;
+    for (const sx of [-1, 1]){ ctx.beginPath(); ctx.moveTo(...P(sx * 0.19, -0.27)); ctx.lineTo(...P(sx * 0.09, -0.2)); ctx.lineTo(...P(sx * 0.19, -0.13)); ctx.stroke(); }
+  } else {
+    for (const sx of [-1, 1]){ circ(sx * 0.13, -0.2, eating ? 0.04 : 0.065, '#111827'); circ(sx * 0.13 + 0.025, -0.23, 0.02, '#FFFFFF'); }
+  }
+  // 腮红（吃东西时鼓起来）
+  circ(-0.23, -0.02, eating ? 0.1 + chew * 0.03 : 0.07, 'rgba(244,114,182,.55)');
+  circ(0.23, -0.02, eating ? 0.1 + chew * 0.03 : 0.07, 'rgba(244,114,182,.55)');
+  // 鼻子、胡须
+  ell(0, -0.07, 0.055, 0.042, '#EC4899');
+  ctx.strokeStyle = 'rgba(55,65,81,.7)'; ctx.lineWidth = k * 0.018;
+  for (const sx of [-1, 1]) for (const dy of [-0.06, 0, 0.06]){ ctx.beginPath(); ctx.moveTo(...P(sx * 0.1, -0.04)); ctx.lineTo(...P(sx * 0.45, -0.04 + dy * 1.6)); ctx.stroke(); }
+  // 嘴 + 两颗大门牙
+  if (eating && et > 0.3) ell(0, 0.07, 0.1, 0.03 + chew * 0.07, '#7F1D1D');
+  else if (yuck) ell(0, 0.1, 0.06, 0.07, '#F472B6');   // 吐舌头：呸！
+  else { ctx.strokeStyle = '#374151'; ctx.lineWidth = k * 0.025; ctx.beginPath(); ctx.arc(...P(-0.045, 0.02), k * 0.045, 0.1, Math.PI - 0.1); ctx.arc(...P(0.045, 0.02), k * 0.045, 0.1, Math.PI - 0.1); ctx.stroke(); }
+  ctx.fillStyle = '#FFFFFF';
+  { const [tx, ty] = P(-0.045, 0.045); ctx.fillRect(tx, ty, k * 0.042, k * 0.07); ctx.fillRect(tx + k * 0.048, ty, k * 0.042, k * 0.07); }
+  // 被吃的蔬菜：先飞进嘴边，再一口一口变小
+  if (eating && e.emoji){
+    const [mx, my] = P(0, 0.2);
+    let ex = mx, ey = my, size = k * 0.5;
+    if (et < 0.3 && e.from){ const t = et / 0.3, ease = t * (2 - t); ex = e.from.x + (mx - e.from.x) * ease; ey = e.from.y + (my - e.from.y) * ease - Math.sin(t * Math.PI) * r * 0.8; size = k * (0.9 - 0.4 * t); }
+    else size = k * 0.72 * (1 - bite * 0.22);
+    if (size > 2){
+      ctx.font = `${Math.round(size)}px "Apple Color Emoji","Segoe UI Emoji",sans-serif`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#000';
+      ctx.fillText(e.emoji, ex, ey);
+    }
+    circ(-0.15, 0.22, 0.08, '#F9A8D4'); circ(0.15, 0.22, 0.08, '#F9A8D4');   // 小手捧着
+  } else { circ(-0.17, 0.3, 0.08, '#F9A8D4'); circ(0.17, 0.3, 0.08, '#F9A8D4'); }
+  // 玻璃球前面的反光和边
+  ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = r * 0.06;
+  ctx.beginPath(); ctx.arc(x, y, r * 0.97, 0, Math.PI * 2); ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,255,.75)'; ctx.lineWidth = r * 0.08;
+  ctx.beginPath(); ctx.arc(x, y, r * 0.8, Math.PI * 1.1, Math.PI * 1.4); ctx.stroke();
+  const gl = ctx.createRadialGradient(x - r * .4, y - r * .45, r * .05, x, y, r);
+  gl.addColorStop(0, 'rgba(255,255,255,.55)'); gl.addColorStop(.3, 'rgba(255,255,255,0)'); gl.addColorStop(1, 'rgba(59,130,246,.18)');
+  ctx.fillStyle = gl; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+}
+
+function drawItem(it, x, groundY, r, alpha, now){
+  if (r < 1.5 || alpha <= 0.02) return;
+  const age = (now - it.t) / 1000;
+  let a = alpha, scale = 1, shakeX = 0;
+  if (it.state === 'got'){ if (age > 0.5) return; scale = 1 + age * 2.2; a *= 1 - age * 2; }
+  else if (it.state === 'fade'){ if (age > 0.6) return; a *= 1 - age / 0.6; }
+  else if (it.state === 'bad'){ shakeX = Math.sin(age * 40) * r * 0.18 * Math.max(0, 1 - age * 2); }
+  const bob = Math.sin(now / 300 + it.lane * 3) * r * 0.12;
+  const cy = groundY - r * 1.3 - bob;
+  ctx.globalAlpha = a * 0.5;
+  ctx.fillStyle = 'rgba(30,20,60,.35)';
+  ctx.beginPath(); ctx.ellipse(x, groundY - r * 0.05, r * 0.75, r * 0.22, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.globalAlpha = a;
+  const R = r * scale, X = x + shakeX;
+  ctx.fillStyle = it.state === 'bad' ? '#E5E7EB' : '#FFFFFF';
+  ctx.beginPath(); ctx.arc(X, cy, R, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = it.state === 'bad' ? '#9CA3AF' : it.col; ctx.lineWidth = Math.max(1.5, R * 0.14); ctx.stroke();
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  if (it.emoji){ ctx.font = `${Math.round(R * 1.15)}px "Apple Color Emoji","Segoe UI Emoji",sans-serif`; ctx.fillStyle = '#000'; ctx.fillText(it.emoji, X, cy + R * 0.06); }
+  else { ctx.font = it.cat === '汉字' ? `700 ${Math.round(R * 1.15)}px "Kaiti SC","STKaiti","KaiTi",serif` : `900 ${Math.round(R * (it.label.length > 1 ? 0.95 : 1.2))}px system-ui,-apple-system,sans-serif`; ctx.fillStyle = it.state === 'bad' ? '#6B7280' : it.col; ctx.fillText(it.label, X, cy + R * 0.06); }
+  if (it.state === 'bad' && age < 1.2){ ctx.font = `900 ${Math.round(R * 1.4)}px system-ui,sans-serif`; ctx.fillStyle = '#EF4444'; ctx.fillText('✗', X, cy); }
+  if (it.emoji && R > 20){
+    const fs = Math.max(11, Math.round(R * 0.36));
+    ctx.font = `800 ${fs}px system-ui,-apple-system,sans-serif`;
+    const tw = ctx.measureText(it.label).width + fs;
+    ctx.fillStyle = 'rgba(255,255,255,.92)';
+    // 名字牌放在圆牌上方：放下面会被更近的路面挡住一半
+    const ly = cy - R * 1.08 - fs * 1.5;
+    ctx.beginPath(); ctx.roundRect ? ctx.roundRect(X - tw / 2, ly, tw, fs * 1.5, fs * 0.75) : ctx.rect(X - tw / 2, ly, tw, fs * 1.5); ctx.fill();
+    ctx.fillStyle = '#334155'; ctx.fillText(it.label, X, ly + fs * 0.78);
+  }
+  ctx.globalAlpha = 1;
+  itemScreen.set(it, { x:X, y:cy });
+}
+
+function drawFinish(x, y, w, s, a){
+  ctx.globalAlpha = a;
+  const ph = s * 1500 * yF, pw = Math.max(2, w * 0.06), bh = s * 380 * yF;
+  ctx.fillStyle = '#F8FAFC';
+  ctx.fillRect(x - w - pw, y - ph, pw, ph); ctx.fillRect(x + w, y - ph, pw, ph);
+  const cols = 12, cw = (2 * w) / cols;
+  for (let r = 0; r < 2; r++) for (let c = 0; c < cols; c++){ ctx.fillStyle = (r + c) % 2 ? '#111827' : '#FFFFFF'; ctx.fillRect(x - w + c * cw, y - ph + r * bh / 2, cw + 0.5, bh / 2 + 0.5); }
+  ctx.font = `900 ${Math.max(10, Math.round(bh * 0.9))}px system-ui,sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+  ctx.fillStyle = '#fff'; ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = Math.max(1, bh * 0.08);
+  ctx.strokeText('终点', x, y - ph - 4); ctx.fillText('终点', x, y - ph - 4);
+  ctx.globalAlpha = 1;
+}
+
+function burst(x, y, color, n){
+  const cols = [color, '#FACC15', '#FFFFFF', '#F472B6', '#38BDF8'];
+  for (let i = 0; i < n; i++){
+    const a = Math.random() * Math.PI * 2, sp = 140 + Math.random() * 300;
+    particles.push({ x, y, vx:Math.cos(a) * sp, vy:Math.sin(a) * sp - 160, life:1, c:cols[i % cols.length], s:5 + Math.random() * 6, r:Math.random() * 6 });
+  }
+}
+
+/* ============================ 更新 ============================ */
+const input = { left:false, right:false, hold:0, drag:null };
+function update(dt){
+  if (game.state === 'count'){
+    game.countT -= dt;
+    const txt = game.countT > 0.2 ? String(Math.ceil(game.countT - 0.2)) : '出发！';
+    if ($('count').textContent !== txt){ $('count').textContent = txt; amb(txt === '出发！' ? 880 : 520, .15, 'square', .06); }
+    if (game.countT > 0.2) return;
+    game.state = 'play'; game.goT = 0.7;
+    if (game.mode.ball === 'train') trainHorn();
+    game.row = makeRow(dist + playerZ + ROW_AHEAD);
+  }
+  if (game.goT > 0){ game.goT -= dt; if (game.goT <= 0) $('count').textContent = ''; }
+  if (game.state !== 'play' && game.state !== 'over') return;
+
+  let cruise = game.state === 'over' ? 0 : 2500 + game.got.length * 60;
+  if (game.mode && game.mode.world === 'coaster' && game.state === 'play'){
+    const cs = segAt(dist + playerZ), slope = (cs.y2 - cs.y1) / SEG;
+    cruise *= Math.max(0.6, Math.min(1.7, 1 - slope * 1.1));
+    if (slope > 0.22 && performance.now() - (game.clackT || 0) > 140){ game.clackT = performance.now(); amb(1400, .02, 'square', .025); }
+    if (slope < -0.35 && !game.dropping){ game.dropping = true; toast('哇——！🎢 冲下去啦！'); amb(900, .5, 'sine', .05, 300); }
+    if (slope > -0.1) game.dropping = false;
+  }
+  const row = game.row;
+  // AI 对话：每一排前面先停下来，聊得切题了才接着滚
+  const ai = opts.ai && game.state === 'play';
+  const left = row && !row.finish && !row.done ? row.z - AI_STOP - (dist + playerZ) : Infinity;
+  if (ai && left < Infinity && !row.cleared){
+    if (left < 120){ cruise = 0; speed = 0; if (!game.asking) askNow(); }
+    else cruise = Math.min(cruise, left * 2.2);
+    // 问题念完了才能回答
+    if (game.asking && !game.aiBusy && game.inputOn !== !talking()) setAiInput(!talking());
+  }
+  // 还在念题目（或者别的话）时，小球停在这一排前面等一等，念完再撞 —— 不会题还没念完答案就先出来了
+  const hold = !ai && game.state === 'play' && left < Infinity && talking();
+  if (hold) cruise = Math.min(cruise, Math.max(0, left) * 2.2);
+  if (ball.falling){
+    ball.fallT += dt; speed = 0;
+    if (ball.fallT > 1.1){
+      ball.falling = false; ball.x = 0; ball.vx = 0; ball.inv = 1.5;
+      game.hearts--; updateHud();
+      if (game.hearts <= 0){ lose(); return; }
+    }
+    return;
+  }
+  if ((ai || hold) && cruise < speed) speed = cruise;
+  else speed += (cruise - speed) * Math.min(1, dt * (game.state === 'over' ? 2.5 : 1.2));
+  const prevBallZ = dist + playerZ;
+  dist += speed * dt;
+  const ballZ = dist + playerZ;
+  const sp = speed / 3000;
+  const inT = !!segAt(ballZ).tunnel, inG = !!segAt(ballZ).glass;
+  if (game.state === 'play' && inG !== !!game.inGlass){ game.inGlass = inG; if (inG){ toast('🌊 海底玻璃隧道！看，好多鱼！'); [700, 900, 1100].forEach((f, k) => amb(f, .08, 'sine', .06, 0, k * .12)); } }
+  if (game.state === 'play' && inT !== !!game.inTunnel){ game.inTunnel = inT; if (inT){ toast('🚇 钻进隧道啦！'); if (game.mode.ball === 'train') trainHorn(); else amb(160, .6, 'sawtooth', .035, 70); } }
+  // 左右控制 + 转弯时的离心力（这就是要「平衡」的地方）
+  if (ai){
+    // AI 模式不用手控制：聊对了，小球自己滚向要撞的那个
+    const tgt = row && row.finish ? 0 : row && row.cleared ? (row.items.find(i => i.ok) || { lane:0 }).lane : ball.x;
+    ball.x += Math.max(-2.2 * dt, Math.min(2.2 * dt, tgt - ball.x));
+  } else {
+    const steer = (input.left ? -1 : 0) + (input.right ? 1 : 0) + input.hold;
+    ball.x += steer * 1.9 * dt;
+    ball.x -= segAt(ballZ).curve * sp * dt * 0.1;
+  }
+  ball.x += ball.vx * dt; ball.vx *= Math.exp(-5 * dt);
+  ball.hopV -= 9 * dt; ball.hop = Math.max(0, ball.hop + ball.hopV * dt); if (ball.hop === 0) ball.hopV = 0;
+  ball.phase += speed * dt / BALLR;
+  ball.inv = Math.max(0, ball.inv - dt);
+  skyX += segAt(ballZ).curve * sp * dt * 60;
+  if (opts.fence || ai || inT || inG){
+    // 护栏：撞到栏杆弹回来，不会掉下去。隧道里两边是墙，没开护栏也一样弹回来（墙在人行道外侧，所以能滚得更靠边）
+    const lim = opts.fence || ai ? 0.84 : inG ? 1.0 : 0.98;
+    if (Math.abs(ball.x) > lim){
+      const sg = Math.sign(ball.x);
+      if (performance.now() - (game.bonkT || 0) > 400 && (Math.abs(ball.vx) > 0.3 || input.left || input.right || input.hold)){ amb(220, .08, 'triangle', .08); game.bonkT = performance.now(); }
+      ball.x = sg * lim; ball.vx = -sg * Math.max(0.6, Math.abs(ball.vx) * 0.5);
+    }
+  }
+  if (game.state === 'play' && !opts.fence && !ai && !inT && !inG && Math.abs(ball.x) > 1.06){
+    ball.falling = true; ball.fallT = 0; sfxFall();
+    toast('哎呀，掉下去了！', true); speak('哎呀，掉下去了，小心边边哦');
+    return;
+  }
+  ball.x = Math.max(-1.3, Math.min(1.3, ball.x));
+  if (game.state === 'play' && row && !row.done && prevBallZ < row.z && ballZ >= row.z){
+    resolveRow(row);
+    if (game.state === 'play'){ game.prevRow = row; game.row = makeRow(ballZ + ROW_AHEAD); }
+  }
+}
+
+/* ============================ 输入 ============================ */
+cv.addEventListener('pointerdown', e => {
+  if (game.state !== 'play' && game.state !== 'count') return;
+  if (opts.ai && !game.paused) return;
+  if (game.paused){ setPause(false); return; }
+  input.drag = { x:e.clientX, moved:false };
+  input.hold = e.clientX < W / 2 ? -1 : 1;
+  try{ cv.setPointerCapture(e.pointerId); }catch(_){}
+  $('help').style.opacity = 0;
+});
+cv.addEventListener('pointermove', e => {
+  const d = input.drag; if (!d) return;
+  const dx = e.clientX - d.x;
+  if (!d.moved && Math.abs(dx) > 10){ d.moved = true; input.hold = 0; }
+  if (d.moved && game.state === 'play' && !ball.falling) ball.x += dx / (W * 0.4);
+  d.x = e.clientX;
+});
+const endPointer = () => { input.drag = null; input.hold = 0; };
+cv.addEventListener('pointerup', endPointer);
+cv.addEventListener('pointercancel', endPointer);
+window.addEventListener('keydown', e => {
+  if (e.code === 'ArrowLeft' || e.code === 'KeyA'){ input.left = true; $('help').style.opacity = 0; }
+  else if (e.code === 'ArrowRight' || e.code === 'KeyD'){ input.right = true; $('help').style.opacity = 0; }
+  else if ((e.code === 'KeyP' || e.code === 'Space') && game.state === 'play'){ e.preventDefault(); setPause(!game.paused); }
+});
+window.addEventListener('keyup', e => {
+  if (e.code === 'ArrowLeft' || e.code === 'KeyA') input.left = false;
+  else if (e.code === 'ArrowRight' || e.code === 'KeyD') input.right = false;
+});
+function setPause(p){
+  game.paused = p;
+  $('pauseBtn').textContent = p ? '▶️' : '⏸';
+  $('count').textContent = p ? '暂停' : '';
+}
+$('pauseBtn').addEventListener('click', () => { if (game.state === 'play') setPause(!game.paused); });
+window.addEventListener('blur', () => { if (game.state === 'play') setPause(true); input.left = input.right = false; endPointer(); });
+window.addEventListener('resize', resize);
+
+/* ============================ 主循环 ============================ */
+let last = performance.now(), acc = 0;
+function frame(now){
+  const dt = Math.min(0.1, (now - last) / 1000); last = now;
+  if (!game.paused){ acc += dt; while (acc >= 1 / 120){ update(1 / 120); acc -= 1 / 120; } }
+  render(now, game.paused ? 0 : dt);
+  requestAnimationFrame(frame);
+}
+resize();
+buildTrack();
+showModes();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

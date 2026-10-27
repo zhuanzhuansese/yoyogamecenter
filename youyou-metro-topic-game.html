@@ -1,0 +1,2916 @@
+<!doctype html>
+<html lang="zh-CN" data-page-node-id="6OGWBBKbpBZsNXt4hoHUcR">
+<head data-page-node-id="D28Ozln7azE3JxfvEqAgll">
+<meta charset="utf-8" data-page-node-id="mxEFddEE0sbTYoaPhfbuP3">
+<!-- iPad 上禁掉整页双指缩放/双击放大：地图有自己的缩放，页面缩放会打乱布局 -->
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>佑佑的地铁话题大冒险 · 深圳</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  /* touch-action:manipulation 去掉移动端 300ms 双击缩放延迟 */
+  button,.chip,.lg,input,textarea,select{touch-action:manipulation}
+  :root{
+    --bg:#0A0F1E; --bg2:#0E1428; --panel:#141C33; --panel2:#1A2340;
+    --line:#2A3457; --text:#E8EDF9; --muted:#8E9ABF; --accent:#5EEAD4;
+    --warn:#FCA5A5; --gold:#FCD34D;
+  }
+  html,body{height:100%}
+  body{
+    background:radial-gradient(1200px 700px at 20% -10%,#152046 0%,var(--bg) 60%);
+    color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    overflow:hidden;
+  }
+  /* iPad / 手机的 Safari 里 100vh 会把底部工具栏下面的部分也算进去，底部按钮就被挡住了；
+     用 100dvh（实际可见高度），老浏览器退回 100vh */
+  .app{display:grid;grid-template-rows:auto 1fr;height:100vh;height:100dvh}
+  header{
+    display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;padding:12px 20px;
+    border-bottom:1px solid var(--line);background:rgba(10,15,30,.6);backdrop-filter:blur(8px);
+  }
+  header h1{font-size:19px;letter-spacing:.5px;display:flex;align-items:center;gap:8px}
+  header .sub{font-size:12px;color:var(--muted);margin-left:2px}
+  header .spacer{flex:1}
+  .btn{
+    border:1px solid var(--line);background:var(--panel2);color:var(--text);
+    padding:7px 14px;border-radius:9px;font-size:13px;cursor:pointer;transition:.15s;
+    font-family:inherit;
+  }
+  .btn:hover{background:#243055;border-color:#3C4A7A}
+  .btn:disabled{opacity:.4;cursor:not-allowed}
+  .btn.primary{background:linear-gradient(180deg,#2DD4BF,#14B8A6);border-color:#2DD4BF;color:#04231F;font-weight:700}
+  .btn.primary:hover{filter:brightness(1.08);background:linear-gradient(180deg,#2DD4BF,#14B8A6)}
+
+  main{display:grid;grid-template-columns:1fr 396px;gap:14px;padding:14px;min-height:0;
+    padding-bottom:calc(20px + env(safe-area-inset-bottom))}   /* 底部多留一点，按钮不贴边 */
+  main > *{min-height:0}
+  .map-panel{
+    background:linear-gradient(180deg,#CEE7F3,#BEDCEB);
+    border:1px solid var(--line);border-radius:16px;position:relative;overflow:hidden;min-height:0;
+  }
+  /* touch-action:none —— 关掉浏览器原生的滑动/捏合，交给下面的 pointer 事件自己实现
+     （单指拖动平移 + 双指捏合缩放），否则 iPad 上双指会把整个页面放大而不是缩放地图 */
+  .map-scroll{width:100%;height:100%;overflow:auto;cursor:grab;touch-action:none;-webkit-overflow-scrolling:auto}
+  .map-scroll.dragging{cursor:grabbing}
+  .map-scroll::-webkit-scrollbar{width:11px;height:11px}
+  .map-scroll::-webkit-scrollbar-thumb{background:#2C3860;border-radius:8px;border:2px solid transparent;background-clip:content-box}
+  .map-scroll::-webkit-scrollbar-thumb:hover{background:#3C4C80;background-clip:content-box}
+  .map-scroll svg{display:block;width:1200px;height:auto}
+
+  .zoombar{
+    position:absolute;left:14px;top:12px;display:flex;gap:5px;align-items:center;
+    background:rgba(10,15,30,.86);border:1px solid var(--line);border-radius:11px;padding:5px 7px;
+    backdrop-filter:blur(6px);z-index:4
+  }
+  .zoombar button{
+    width:29px;height:29px;border-radius:8px;border:1px solid var(--line);background:var(--panel2);
+    color:var(--text);font-size:15px;cursor:pointer;line-height:1;font-family:inherit;padding:0
+  }
+  .zoombar button:hover{background:#243055;border-color:#3C4A7A}
+  .zoombar .pct{font-size:11px;color:var(--muted);min-width:42px;text-align:center;font-variant-numeric:tabular-nums}
+  .lbl{font-size:12px;fill:#3B3F47;font-weight:500;pointer-events:none;transition:fill .2s,opacity .18s;
+    paint-order:stroke;stroke:#FFFFFF;stroke-width:3px;stroke-linejoin:round}
+  .lbl.hub{fill:#111827;font-weight:700}
+  .lbl.cur{fill:#0B6BCB;font-weight:900}
+  .lbl.dest{fill:#B07D00;font-weight:900}
+  /* 站名尽量都显示，重叠的才由 resolveLabels 隐藏 */
+  .lbl.found{fill:#B07D00;font-weight:900;opacity:1}
+  .lbl.hide{opacity:0}
+  .lbl.hide.show,.lbl.hide.cur,.lbl.hide.dest,.lbl.hide.found{opacity:1}
+  .hit{cursor:pointer}
+  .lg{cursor:pointer;user-select:none;padding:1px 5px;border-radius:6px;transition:background .15s,color .15s}
+  .lg:hover{background:#1B2440;color:#EEF2FA}
+  .lg.on{background:#26314F;color:#EEF2FA;box-shadow:inset 0 0 0 1px var(--line)}
+  .searchbox{position:absolute;right:14px;bottom:12px;z-index:5;display:flex;flex-direction:column;align-items:flex-end;gap:5px}
+  .searchbox input{
+    width:150px;padding:7px 10px;border-radius:10px;border:1px solid var(--line);
+    background:rgba(10,15,30,.9);color:#EEF2FA;font-size:12px;outline:none;backdrop-filter:blur(6px)
+  }
+  .searchbox input:focus{border-color:#3C4A7A}
+  .searchbox .res{
+    width:150px;max-height:190px;overflow:auto;background:rgba(10,15,30,.96);border:1px solid var(--line);
+    border-radius:10px;padding:4px;backdrop-filter:blur(6px)
+  }
+  .searchbox .res div{
+    padding:5px 8px;border-radius:7px;font-size:12px;color:#C7D0E8;cursor:pointer;
+    display:flex;justify-content:space-between;gap:6px;align-items:center
+  }
+  .searchbox .res div:hover{background:#1B2440;color:#fff}
+  .searchbox .res small{color:#6E7AA0;font-size:10px}
+  .searchbox .res .none{padding:6px 8px;font-size:12px;color:#6E7AA0;cursor:default}
+
+  .legend{
+    position:absolute;left:14px;bottom:12px;display:flex;gap:14px;flex-wrap:wrap;
+    background:rgba(10,15,30,.82);border:1px solid var(--line);border-radius:11px;padding:8px 12px;
+    font-size:12px;color:var(--muted);backdrop-filter:blur(6px);
+  }
+  .legend i{display:inline-block;width:16px;height:4px;border-radius:2px;margin-right:5px;vertical-align:middle}
+  .hintbar{
+    position:absolute;right:14px;top:12px;background:rgba(10,15,30,.82);border:1px solid var(--line);
+    border-radius:11px;padding:8px 12px;font-size:12px;color:var(--muted);backdrop-filter:blur(6px)
+  }
+
+  aside{display:flex;flex-direction:column;gap:12px;min-height:0;overflow:auto;padding-right:2px}
+  aside::-webkit-scrollbar{width:8px}
+  aside::-webkit-scrollbar-thumb{background:#26304F;border-radius:8px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px}
+  .card h2{font-size:12px;color:var(--muted);font-weight:600;letter-spacing:1.2px;margin-bottom:10px}
+
+  .statgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .stat{background:var(--panel2);border-radius:11px;padding:10px 12px}
+  .stat .k{font-size:11px;color:var(--muted);margin-bottom:3px}
+  .stat .v{font-size:17px;font-weight:800;letter-spacing:.5px}
+  .stat .v small{font-size:11px;color:var(--muted);font-weight:500;margin-left:4px}
+
+  .prevbox{background:var(--panel2);border-radius:11px;padding:11px 12px;border-left:3px solid var(--accent)}
+  .prevbox .tag{font-size:15px;font-weight:800;margin-bottom:4px}
+  .prevbox .quote{font-size:13px;color:#C4CEE8;line-height:1.5;word-break:break-all}
+
+  textarea{
+    width:100%;min-height:82px;resize:vertical;background:#0D1327;color:var(--text);
+    border:1px solid var(--line);border-radius:11px;padding:11px 12px;font-size:15px;line-height:1.6;
+    font-family:inherit;outline:none;
+  }
+  textarea:focus{border-color:#3D5390}
+  textarea::placeholder{color:#5C688C}
+  .row{display:flex;gap:8px;margin-top:10px;align-items:center}
+  .row .btn{padding:11px 18px;font-size:15px;font-weight:700}
+
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+  .chip{
+    background:#182142;border:1px solid #2C3760;color:#B9C4E2;border-radius:999px;
+    padding:5px 11px;font-size:12px;cursor:pointer;transition:.15s;font-family:inherit
+  }
+  .chip:hover{background:#243055;border-color:#4A5C96;color:#fff}
+
+  .verdict{border-radius:11px;padding:12px;font-size:14px;line-height:1.6;display:none}
+  .verdict.ok{display:block;background:rgba(45,212,191,.13);border:1px solid rgba(45,212,191,.42);color:#A7F3E4}
+  .verdict.no{display:block;background:rgba(252,165,165,.12);border:1px solid rgba(252,165,165,.4);color:#FECACA}
+  .secwarn{
+    margin-top:9px;padding:9px 11px;border-radius:10px;font-size:12px;line-height:1.65;
+    background:rgba(252,165,165,.12);border:1px solid rgba(252,165,165,.4);color:#FECACA
+  }
+  .secwarn b{color:#FFF}
+  .secwarn code{
+    background:rgba(0,0,0,.28);padding:1px 5px;border-radius:5px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;word-break:break-all
+  }
+
+  .verdict b{font-weight:800}
+  .verdict .sc{
+    display:inline-flex;align-items:center;gap:6px;margin-top:8px;padding:4px 10px;border-radius:999px;
+    background:rgba(252,211,77,.14);border:1px solid rgba(252,211,77,.4);color:var(--gold);
+    font-size:12.5px;font-weight:800
+  }
+
+  /* 点赞 / 叉叉 大特效（持续 3 秒） */
+  .bigmark{
+    position:fixed;left:50%;top:40%;transform:translate(-50%,-50%) scale(.3);
+    font-size:230px;line-height:1;z-index:70;pointer-events:none;opacity:0
+  }
+  .bigmark.good{color:#FCD34D;filter:drop-shadow(0 0 44px rgba(252,211,77,.7))}
+  .bigmark.bad{color:#F87171;filter:drop-shadow(0 0 44px rgba(248,113,113,.7))}
+  .bigmark.show{animation:bigmarkIn 3s cubic-bezier(.2,1.6,.4,1) both}
+  @keyframes bigmarkIn{
+    0%{transform:translate(-50%,-50%) scale(.2) rotate(-20deg);opacity:0}
+    10%{transform:translate(-50%,-50%) scale(1.35) rotate(6deg);opacity:1}
+    18%{transform:translate(-50%,-50%) scale(.94) rotate(-2deg);opacity:1}
+    24%{transform:translate(-50%,-50%) scale(1.05) rotate(0);opacity:1}
+    88%{transform:translate(-50%,-50%) scale(1.05) rotate(0);opacity:1}
+    100%{transform:translate(-50%,-50%) scale(1.25) rotate(0);opacity:0}
+  }
+
+  /* 佑佑的回复气泡 */
+  .youyou{
+    display:none;align-items:flex-start;gap:8px;margin:2px 0 10px;
+    background:rgba(94,234,212,.12);border:1px solid rgba(94,234,212,.4);
+    border-radius:12px;padding:9px 12px;font-size:14px;line-height:1.55;color:#D7FFF6
+  }
+  .youyou.on{display:flex}
+  .youyou .who{font-size:19px;line-height:1;margin-top:1px}
+  .youyou b{color:var(--accent)}
+
+  /* —— 右侧：纯微信聊天界面 —— */
+  aside.wx{
+    gap:0;padding:0;overflow:hidden;background:#EDEDED;border-radius:16px;
+    border:1px solid var(--line);color:#1A1A1A
+  }
+  .wx-top{
+    flex:none;display:flex;align-items:center;justify-content:center;position:relative;
+    height:48px;background:#EDEDED;border-bottom:1px solid #DADADA;font-size:16px;font-weight:600
+  }
+  .wx-top i{position:absolute;right:16px;font-style:normal;font-size:18px;letter-spacing:1px;color:#333}
+  .wchat{
+    flex:1;min-height:0;display:flex;flex-direction:column;gap:14px;
+    padding:14px 12px;overflow-y:auto
+  }
+  .wchat::-webkit-scrollbar{width:6px}
+  .wchat::-webkit-scrollbar-thumb{background:#C8C8C8;border-radius:6px}
+  .wempty{margin:auto;color:#9AA0A6;font-size:13px}
+  .wmsg{display:flex;align-items:flex-start;gap:8px}
+  .wmsg.me{justify-content:flex-end}
+  .wavatar{
+    flex:none;width:38px;height:38px;border-radius:6px;background:#fff;
+    display:flex;align-items:center;justify-content:center;font-size:21px
+  }
+  .wbubble{
+    max-width:72%;padding:9px 12px;border-radius:6px;font-size:15px;line-height:1.55;
+    word-break:break-word;position:relative;color:#1A1A1A
+  }
+  .wmsg.them .wbubble{background:#FFFFFF}
+  .wmsg.me .wbubble{background:#95EC69}
+  .wmsg.them .wbubble::before{
+    content:"";position:absolute;left:-5px;top:13px;border:6px solid transparent;
+    border-right-color:#FFFFFF;border-left:0
+  }
+  .wmsg.me .wbubble::before{
+    content:"";position:absolute;right:-5px;top:13px;border:6px solid transparent;
+    border-left-color:#95EC69;border-right:0
+  }
+  /* 判定结果：像微信的灰色系统提示 */
+  .wx .verdict{
+    flex:none;margin:0 auto 10px;max-width:88%;padding:7px 12px;border-radius:6px;
+    font-size:12.5px;line-height:1.6;text-align:center;border:0;color:#fff;background:rgba(0,0,0,.28)
+  }
+  .wx .verdict.ok,.wx .verdict.no{color:#fff;border:0}
+  .wx .verdict.ok{background:rgba(0,0,0,.28)}
+  .wx .verdict.no{background:rgba(196,52,52,.78)}
+  .wx .verdict span{color:inherit!important}
+  .wx .verdict .sc{background:rgba(255,255,255,.2);border:0;color:#fff;margin-top:4px;padding:2px 9px}
+  .wx .secwarn{flex:none;margin:0 10px 8px;background:#FFF1F0;border:1px solid #F5C2C0;color:#8A1F1F}
+  .wx .secwarn b{color:#8A1F1F}
+  .wx .secwarn code{background:rgba(0,0,0,.06)}
+  .wx .chips{flex:none;margin:0 10px 8px}
+  /* 微信底部输入栏：只有一个「按住 说话」（小朋友不会打字）；浏览器不支持语音时才退回输入框 */
+  aside.wx{position:relative}
+  .wx-bar{
+    flex:none;position:relative;z-index:21;display:flex;align-items:flex-end;gap:8px;
+    padding:8px 10px calc(8px + env(safe-area-inset-bottom));
+    background:#F7F7F7;border-top:1px solid #DADADA
+  }
+  .wx-bar .btn{flex:none;white-space:nowrap;height:40px;padding:0 14px;font-size:15px;font-weight:600;border-radius:6px}
+  .wx-hold{
+    flex:1;min-width:0;height:48px;border:0;border-radius:8px;background:#FFFFFF;color:#1A1A1A;
+    font-size:17px;font-weight:600;letter-spacing:2px;font-family:inherit;cursor:pointer;
+    user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:none
+  }
+  .wx-hold.on{background:#C6C6C6}
+  .wx-hold:disabled{color:#B0B0B0;cursor:default}
+  #input{
+    flex:1;min-width:0;height:40px;max-height:120px;resize:none;background:#FFFFFF;color:#1A1A1A;
+    border:0;border-radius:6px;padding:8px 10px;font-size:16px;line-height:24px;font-family:inherit
+  }
+  #input::placeholder{color:#B0B0B0}
+  .wx-bar.voice #input,.wx-bar.voice #sayBtn,.wx-bar.kbd .wx-hold{display:none}
+  #input:placeholder-shown + #sayBtn{display:none}   /* 像微信：有字才出现「发送」 */
+  #sayBtn{background:#07C160;border-color:#07C160;color:#fff}
+  #sayBtn:hover{filter:brightness(1.05);background:#07C160}
+  /* 按住说话时的浮层：绿色气泡实时显示转出来的文字，上滑变红取消 */
+  .wx-rec{
+    position:absolute;left:0;right:0;top:0;bottom:0;z-index:20;display:none;flex-direction:column;align-items:center;
+    background:rgba(0,0,0,.55);pointer-events:none
+  }
+  .wx-rec.on{display:flex}
+  .wx-rec-bubble{
+    margin-top:auto;position:relative;min-width:160px;max-width:84%;min-height:62px;padding:14px 16px;
+    border-radius:10px;background:#95EC69;color:#1A1A1A;font-size:16px;line-height:1.55;word-break:break-word;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;transition:background .15s
+  }
+  .wx-rec-bubble::after{
+    content:"";position:absolute;bottom:-7px;left:50%;margin-left:-7px;
+    border:7px solid transparent;border-top-color:#95EC69;border-bottom:0
+  }
+  .wx-rec.cancel .wx-rec-bubble{background:#FA5151;color:#fff}
+  .wx-rec.cancel .wx-rec-bubble::after{border-top-color:#FA5151}
+  .wx-rec-wave{display:flex;align-items:center;gap:3px;height:22px}
+  .wx-rec-wave i{width:3px;height:6px;border-radius:2px;background:currentColor;animation:wxwave .9s ease-in-out infinite}
+  .wx-rec-wave i:nth-child(2n){animation-delay:-.3s}
+  .wx-rec-wave i:nth-child(3n){animation-delay:-.6s}
+  @keyframes wxwave{0%,100%{height:5px}50%{height:20px}}
+  .wx-rec-text:empty{display:none}
+  .wx-rec-cancel{
+    margin-top:48px;width:62px;height:62px;border-radius:50%;background:rgba(255,255,255,.2);color:#fff;
+    display:flex;align-items:center;justify-content:center;font-size:24px;transition:transform .15s,background .15s
+  }
+  .wx-rec.cancel .wx-rec-cancel{background:#fff;color:#FA5151;transform:scale(1.15)}
+  .wx-rec-tip{margin:10px 0 14px;color:rgba(255,255,255,.88);font-size:13.5px}
+
+  /* 口语打分卡 */
+  .scorebox{display:flex;gap:14px;align-items:center;background:var(--panel2);border-radius:11px;padding:12px}
+  .sc-num{
+    flex:none;width:64px;height:64px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    font-size:26px;font-weight:900;letter-spacing:-1px;
+    background:radial-gradient(circle at 35% 30%,#2C3760,#151D36);
+    border:3px solid #3A4778;color:#7C89B5;transition:.35s
+  }
+  .sc-num.on{border-color:var(--gold);color:var(--gold);box-shadow:0 0 18px rgba(252,211,77,.28)}
+  .sc-side{flex:1;min-width:0}
+  .sc-lv{font-size:15px;font-weight:800;margin-bottom:6px}
+  .sc-bar{height:7px;border-radius:99px;background:#202A4C;overflow:hidden}
+  .sc-bar i{display:block;height:100%;width:0;border-radius:99px;background:linear-gradient(90deg,#F87171,#FCD34D,#2DD4BF);transition:width .5s cubic-bezier(.2,.8,.2,1)}
+  .sc-avg{font-size:11.5px;color:var(--muted);margin-top:6px}
+  .sc-stars{font-size:19px;letter-spacing:4px;line-height:1;margin:3px 0 7px;min-height:22px;color:#3A4778}
+  .sc-stars .s{display:inline-block;color:var(--gold);text-shadow:0 0 12px rgba(252,211,77,.55)}
+  .sc-stars .s.pop{animation:starPop .55s cubic-bezier(.2,1.6,.4,1) both}
+  .sc-stars .s.hollow{color:#3A4778;text-shadow:none}
+  .sc-stars .hint{font-size:11px;color:#4E5B84;letter-spacing:0}
+  @keyframes starPop{0%{transform:scale(0) rotate(-40deg);opacity:0}60%{transform:scale(1.5) rotate(10deg);opacity:1}100%{transform:scale(1) rotate(0);opacity:1}}
+  .sc-why{font-size:11.5px;color:#8E9ABF;line-height:1.6;margin-top:9px}
+  .sc-why b{color:var(--gold)}
+  .sc-tip{font-size:11.5px;color:#8E9ABF;line-height:1.6;margin-top:6px}
+
+
+  .chain{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+  .chain .n{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:4px 9px;font-size:12px}
+  .chain .ar{color:#4E5B84;font-size:11px}
+
+  .energy{display:flex;gap:4px;font-size:19px;line-height:1}
+  .energy .off{opacity:.2;filter:grayscale(1)}
+
+  .modal{
+    position:fixed;inset:0;background:rgba(4,8,20,.78);backdrop-filter:blur(6px);
+    display:none;align-items:center;justify-content:center;z-index:50;padding:20px
+  }
+  .modal.on{display:flex}
+
+  /* 换乘站弹窗（和「地铁聊天小列车」同款：白色面板 + 线路徽标卡片） */
+  .ta-overlay{position:fixed;inset:0;background:rgba(15,23,42,.5);display:flex;align-items:center;justify-content:center;padding:16px;z-index:70}
+  .ta-overlay[hidden]{display:none}
+  .ta-panel{background:#fff;color:#1f2937;border-radius:24px;padding:22px 26px;width:min(600px,100%);max-height:100%;overflow:auto;text-align:center}
+  .ta-panel h2{margin:0 0 10px;font-size:26px}
+  .ta-panel button{font:inherit;cursor:pointer;border:none;color:inherit;touch-action:manipulation}
+  .ta-emoji{font-size:56px}
+  .ta-sub{font-size:19px;color:#4b5563;margin:4px 0 14px}
+  .ta-options{display:flex;flex-direction:column;gap:12px}
+  .ta-panel .ta-opt{display:flex;align-items:center;gap:14px;text-align:left;background:#fff;border:3px solid #e5e7eb;border-radius:20px;padding:14px 18px;font-size:24px;font-weight:800}
+  .ta-opt small{display:block;font-size:18px;font-weight:600;color:#6b7280;margin-top:2px}
+  .ta-panel .ta-opt.stay{border-color:#16a34a;background:#f0fdf4}
+  .ta-q{font-size:22px;font-weight:700;margin:0 0 6px}
+  .ta-panel .badge{display:inline-flex;align-items:center;justify-content:center;min-width:1.6em;height:1.6em;padding:0 .25em;border-radius:.25em;color:#fff;font-weight:700;line-height:1;white-space:nowrap}
+  .ta-panel .badge.light{color:#1f2937}
+  .ta-panel .badge.md{font-size:28px;flex:none}
+  .ta-panel .dir-buttons{display:flex;gap:12px;flex-wrap:wrap;justify-content:center}
+  .ta-panel .big-btn{background:#16a34a;color:#fff;font-size:21px;font-weight:700;padding:14px 22px;border-radius:18px}
+  .ta-panel .big-btn.grey{background:#e5e7eb;color:#374151;align-self:center;font-size:18px;padding:10px 24px}
+
+  /* 全屏火车 ride 动画 */
+  /* 列车动画：像一个半透明弹窗浮在当前画面上，不盖住整个屏幕 */
+  #ride{position:fixed;inset:0;z-index:95;display:none;align-items:center;justify-content:center;
+    background:transparent;opacity:0;transition:opacity .3s ease}
+  #ride.show{opacity:1}
+  #ride .ride-box{width:min(960px,94vw);border-radius:26px;padding:14px 10px 10px;
+    background:rgba(15,23,42,.55);box-shadow:0 18px 50px rgba(0,0,0,.35);
+    transform:scale(.92);transition:transform .3s ease}
+  #ride.show .ride-box{transform:scale(1)}
+  #rideSvg{width:100%;aspect-ratio:4/1;display:block}
+  #rideCap{text-align:center;color:#fff;margin-top:6px;
+    font-size:26px;font-weight:800;text-shadow:0 2px 10px rgba(0,0,0,.6);pointer-events:none}
+  #ride .hint{text-align:center;color:#C7D2EA;font-size:12px;pointer-events:none;opacity:.85}
+
+  /* 对号(✓)：纯符号，绿色粗线条，和叉叉一样粗；用 currentColor 上色 */
+  .bigmark.check{color:#4ADE80;filter:drop-shadow(0 0 44px rgba(74,222,128,.7))}
+  .fw-canvas{position:fixed;inset:0;width:100vw;height:100vh;z-index:69;pointer-events:none}
+  #check svg{width:1em;height:1em;display:block}
+  /* 夸张表扬横幅 */
+  #hype{position:fixed;left:50%;top:36%;transform:translate(-50%,-50%) scale(.6);z-index:60;max-width:86vw;
+    background:linear-gradient(135deg,#FFE08A,#FF9F45);color:#3A2400;font-weight:900;font-size:25px;line-height:1.45;
+    padding:18px 26px;border-radius:22px;box-shadow:0 18px 50px rgba(0,0,0,.45);text-align:center;
+    opacity:0;pointer-events:none;transition:transform .4s cubic-bezier(.2,1.5,.4,1),opacity .35s}
+  #hype.show{opacity:1;transform:translate(-50%,-50%) scale(1);animation:hypeBob 1.6s ease-in-out infinite}
+  @keyframes hypeBob{0%,100%{transform:translate(-50%,-50%) scale(1)}50%{transform:translate(-50%,-50%) scale(1.06)}}
+  .mbox{
+    background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:26px 28px;
+    max-width:520px;width:100%;text-align:center
+  }
+  .mbox .big{font-size:52px;margin-bottom:10px}
+  .mbox h3{font-size:23px;margin-bottom:8px}
+  .mbox p{color:var(--muted);font-size:14px;line-height:1.7;margin-bottom:18px}
+  .rules{text-align:left;font-size:13.5px;line-height:1.85;color:#C4CEE8}
+  .rules li{margin-left:18px;margin-bottom:3px}
+  .mbox .btns{display:flex;gap:9px;justify-content:center;flex-wrap:wrap;margin-top:16px}
+
+  /* 结算报告 */
+  .rep{text-align:left;max-height:46vh;overflow:auto;margin:6px 0 4px;border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:10px 2px}
+  .rep::-webkit-scrollbar{width:7px}
+  .rep::-webkit-scrollbar-thumb{background:#2C3760;border-radius:8px}
+  .rep .big-score{display:flex;align-items:baseline;gap:10px;justify-content:center;margin:6px 0 12px}
+  .rep .big-score b{font-size:46px;color:var(--gold);line-height:1}
+  .rep .big-score span{font-size:13px;color:var(--muted)}
+  .rep .line{display:flex;gap:9px;font-size:12.5px;line-height:1.6;padding:6px 2px;border-bottom:1px dashed #222C4C}
+  .rep .line:last-child{border-bottom:0}
+  .rep .line .no{flex:none;width:20px;color:#5C688C;font-variant-numeric:tabular-nums}
+  .rep .line .tx{flex:1;color:#D6DEEF;word-break:break-all}
+  .rep .line .sp{flex:none;font-weight:800;width:34px;text-align:right;font-variant-numeric:tabular-nums}
+  .rep .meta{font-size:12px;color:#8E9ABF;margin:8px 0 2px}
+  .rep .path{font-size:12px;color:#C4CEE8;line-height:1.7;margin-top:6px}
+
+  /* 设置表单 */
+  .setrow{text-align:left;margin-bottom:12px}
+  .setrow label{display:block;font-size:12px;color:var(--muted);margin-bottom:5px}
+  .setrow input, .setrow select{
+    width:100%;background:#0D1327;color:var(--text);border:1px solid var(--line);border-radius:9px;
+    padding:9px 11px;font-size:13.5px;font-family:inherit;outline:none
+  }
+  .setrow input:focus,.setrow select:focus{border-color:#3D5390}
+  .setnote{font-size:11.5px;color:#8E9ABF;line-height:1.65;text-align:left;background:#101833;border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+  @media (max-width:1080px){
+    /* 竖屏 iPad / 手机：地图在上、聊天在下，整页正好一屏，「按住 说话」始终在屏幕里 */
+    main{grid-template-columns:1fr;grid-template-rows:minmax(0,1fr) minmax(0,1.1fr)}
+  }
+
+  /* 触屏设备（iPad / 手机）：标题独占一行，右上角四个按钮换到下一行、放大更好点 */
+  @media (pointer: coarse){
+    header{row-gap:10px}
+    header h1{flex:1 1 100%}
+    header .spacer{display:none}
+    header .btn{flex:1 1 auto;min-height:48px;font-size:15px;padding:10px 14px}
+  }
+</style>
+</head>
+<body data-page-node-id="4IYlOelNG9N9l4PYllpxj5">
+<div class="app" data-page-node-id="bYyFlp0sGl1G4cjQhSvlpw">
+
+  <header data-page-node-id="js5tWOG9rgpMFnw0p5IKZD">
+    <h1 data-page-node-id="nqBUdOPMzvUrfOqMTDIc4j">🚇 佑佑的地铁话题大冒险 <span class="sub" id="metaSub" data-page-node-id="AkpfmNCRJFW47yjzY5XDof">深圳地铁 · 真实站名</span></h1>
+    <div class="spacer" data-page-node-id="fChRAetgWbtpNbbMMOxkBf"></div>
+    <a class="btn" id="homeBtn" href="index.html" style="text-decoration:none;display:inline-block">🏠 主页</a>
+    <button class="btn" id="cfgBtn">⚙️ AI 对话</button>
+    <button class="btn" id="saveBtn">💾 保存本局</button>
+    <button class="btn" id="helpBtn" data-page-node-id="r6OMmDhv4jxju7YtZZPDeT">玩法说明</button>
+    <button class="btn" id="resetBtn" data-page-node-id="l7gKelk7ANY4HhOzDnkn6P">重新开始</button>
+  </header>
+
+  <main data-page-node-id="cAaHaHM5kYIiZ6aMUfwrNf">
+    <section class="map-panel" data-page-node-id="wGnWoTQSUpei77CGhjtFlC">
+      <div class="map-scroll" id="mapScroll">
+        <svg id="map" viewBox="0 0 1200 1008" preserveAspectRatio="xMidYMid meet" data-page-node-id="tXq1en4DtxILF92rKLi4h5"></svg>
+      </div>
+      <div class="zoombar">
+        <button id="zoomOut" title="缩小">－</button>
+        <span class="pct" id="zoomPct">100%</span>
+        <button id="zoomIn" title="放大">＋</button>
+        <button id="zoomFit" title="适应窗口">⤢</button>
+      </div>
+      <div class="hintbar" id="hintbar" data-page-node-id="Id2QEStbuucw4C6AuMkv0n">点一站出发</div>
+      <div class="legend" id="legend" data-page-node-id="b3EsiFiecNin4irqsGQQMT"></div>
+      <div class="searchbox">
+        <div class="res" id="searchRes" style="display:none"></div>
+        <input id="stationSearch" placeholder="🔍 找车站，比如 福田" autocomplete="off">
+      </div>
+    </section>
+
+    <aside class="wx" data-page-node-id="guEaS46iL9yTxwCH3HNQ1y">
+      <div class="wx-top"><span>佑佑 🚇</span><i>···</i></div>
+      <div class="wchat" id="chat"></div>
+      <div class="verdict" id="verdict" data-page-node-id="3kAvL0hVHbyP6sKc8bfx7g"></div>
+      <div class="secwarn" id="secWarn" style="display:none"></div>
+      <div class="chips" id="chips" style="display:none"></div>
+      <div class="wx-rec" id="recLayer">
+        <div class="wx-rec-bubble">
+          <div class="wx-rec-wave"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+          <div class="wx-rec-text" id="recText"></div>
+        </div>
+        <div class="wx-rec-cancel">✕</div>
+        <div class="wx-rec-tip" id="recTip">松开 发送，上滑 取消</div>
+      </div>
+      <div class="wx-bar kbd" id="wxBar" data-page-node-id="8qUNFLVtCEpiVDDRK9ogNg">
+        <button class="wx-hold" id="micBtn" type="button" data-page-node-id="z8X9nJRRNLcAcnB1yPjxIj">按住 说话</button>
+        <textarea id="input" rows="1" placeholder="说一句话，要和上一句有关联才能进站哦…"></textarea>
+        <button class="btn primary" id="sayBtn" data-page-node-id="KcKimK712zaV1RxjBJa6U5">发送</button>
+      </div>
+
+      <!-- 以下元素仍由脚本更新，但不在微信界面里显示 -->
+      <div hidden>
+        <span id="curV">—<small id="curL"></small></span><span id="nextV">—</span>
+        <div id="prevBox"><div id="prevTag"></div><div id="prevQuote"></div></div>
+        <div id="scoreCard"><div id="scNum">—</div><div id="scLv"></div><div id="scStars"></div><i id="scBar"></i><div id="scAvg"></div><div id="scTip"></div></div>
+        <div id="chain"></div>
+      </div>
+    </aside>
+  </main>
+</div>
+
+<div class="modal" id="modal" data-page-node-id="iUHhDPVJuPsA4LaTTdE1Kw">
+  <div class="mbox" id="mbox" data-page-node-id="JO92wbvsFlFSEY0HimO3HC"></div>
+</div>
+<!-- 换乘站：要不要换乘（换乘 = 换话题） -->
+<div class="ta-overlay" id="transferAsk" hidden>
+  <div class="ta-panel">
+    <div class="ta-emoji">🔁</div>
+    <h2 id="taTitle"></h2>
+    <p class="ta-sub">换乘的话，我们就换一个新话题聊；不换乘，就接着聊现在的话题。</p>
+    <div class="ta-options" id="taOptions"></div>
+  </div>
+</div>
+<div class="bigmark good" id="bigUp">👍</div>
+<div class="bigmark bad" id="bigX">❌</div>
+
+<script>
+/* ==================== 线路数据（真实站名 + 真实站序，示意版坐标） ==================== */
+/* 坐标写法：[站名, x, y]；填 null 的站点由 buildLines() 在相邻两个已知坐标之间自动等距插值。
+   换乘站必须在每条线里写成完全相同的坐标，否则两条线会对不齐。 */
+const S = 12; // 坐标缩放
+const LINES = {
+  L1:{ name:'1号线', color:'#34D399', stations:[
+    ['机场东',6,84],['后瑞',null],['固戍',null],['西乡',null],['坪洲',null],['宝体',null],
+    ['宝安中心',36,84],['新安',null],
+    ['前海湾',46,84],['鲤鱼门',null],['大新',null],['桃园',null],['深大',null],['高新园',null],['白石洲',null],
+    ['世界之窗',81,84],['华侨城',null],['侨城东',null],['竹子林',null],
+    ['车公庙',101,84],['香蜜湖',null],
+    ['购物公园',111,84],
+    ['会展中心',116,84],['岗厦',null],['华强路',null],['科学馆',null],
+    ['大剧院',136,84],
+    ['老街',141,84],['国贸',null],['罗湖',151,84]
+  ]},
+  L2:{ name:'2号线', color:'#FB923C', stations:[
+    ['赤湾',14,118],['蛇口港',21,116],['海上世界',28,113],
+    ['水湾',null],['东角头',null],['湾厦',null],['海月',null],['登良',null],
+    ['后海',58,96],['科苑',null],['红树湾',null],
+    ['世界之窗',81,84],['侨城北',null],['深康',null],['安托山',93,65],['侨香',null],['香蜜',null],['香梅北',null],
+    ['景田',108,40],['莲花西',null],
+    ['福田',112,74],['市民中心',116,76],['岗厦北',122,78],['华强北',127,69],['燕南',133,72],
+    ['大剧院',136,84],['湖贝',150,90],['黄贝岭',162,92],
+    ['新秀',null],['莲塘口岸',null],['仙湖路',null],['莲塘',186,108]
+  ]},
+  L3:{ name:'3号线', color:'#60A5FA', stations:[
+    ['福保',104,110],['益田',null],['石厦',107,92],
+    ['购物公园',111,84],['福田',112,74],['少年宫',116,68],
+    ['莲花村',121,72],['华新',126,76],['通新岭',131,79],['红岭',137,80],
+    ['老街',141,84],['晒布',null],['翠竹',null],['田贝',null],['水贝',null],['草埔',null],
+    ['布吉',160,62],['木棉湾',null],['大芬',null],['丹竹头',null],['六约',null],['塘坑',null],['横岗',null],['永湖',null],['荷坳',null],
+    ['大运',196,24],['爱联',null],['吉祥',null],['龙城广场',null],['南联',null],
+    ['双龙',206,10],['梨园',null],['新生',null],['坪西',null],['低碳城',null],['白石塘',null],['富坪',null],['坪地六联',232,6]
+  ]},
+  L4:{ name:'4号线', color:'#F87171', stations:[
+    ['福田口岸',116,102],['福民',null],
+    ['会展中心',116,84],['市民中心',116,76],['少年宫',116,68],
+    ['莲花北',null],['上梅林',null],['民乐',null],['白石龙',null],
+    ['深圳北站',116,28],['红山',null],
+    ['上塘',116,12],['龙胜',null],
+    ['龙华',128,8],['清湖',null],['清湖北',null],['竹村',null],['茜坑',null],['长湖',null],['观澜',null],['松元厦',null],['观澜湖',null],['牛湖',188,8]
+  ]},
+  L5:{ name:'5号线', color:'#C084FC', stations:[
+    ['赤湾',14,118],['荔湾',16,110],['铁路公园',18,102],['妈湾',21,95],['前湾公园',25,90],['前湾',29,88],
+    ['桂湾',38,90],
+    ['前海湾',46,84],['临海',43,78],['宝华',39,78],
+    ['宝安中心',36,84],['翻身',33,79],['灵芝',33,70],['洪浪北',35,62],['兴东',40,55],['留仙洞',47,49],
+    ['西丽',56,45],['大学城',68,40],['塘朗',80,35],['长岭陂',98,30],
+    ['深圳北站',116,28],['民治',126,30],['五和',134,32],['坂田',142,36],['杨美',150,41],
+    ['上水径',156,47],['下水径',158,53],['长龙',159,58],
+    ['布吉',160,62],['百鸽笼',166,68],['布心',168,74],['太安',168,80],['怡景',166,86],
+    ['黄贝岭',162,92],['湖贝',150,90],['东门',143,87],['大剧院',136,84]
+  ]},
+  L11:{ name:'11号线', color:'#F472B6', stations:[
+    ['碧头',6,8],['松岗',null],['后亭',null],['沙井',null],['马安山',null],['塘尾',null],['桥头',null],['福永',null],['机场北',null],
+    ['机场',42,44],['碧海湾',33,58],['宝安',29,73],
+    ['前海湾',46,84],['南山',null],
+    ['后海',58,96],['红树湾南',78,92],
+    ['车公庙',101,84],['福田',112,74],['岗厦北',122,78],['福星',126,90],['华强南',133,94],['红岭南',139,96]
+  ]},
+  L6:{ name:'6号线（光明）', color:'#E879F9', stations:[
+    ['松岗',10,12],['溪头',null],['松岗公园',null],['薯田埔',null],['合水口',null],['公明广场',30,14],
+    ['红花山',null],['楼村',null],['科学公园',null],['光明',44,14],['光明大街',null],['凤凰城',56,14],
+    ['长圳',68,16],['上屋',69,18],['官田',null],['石岩',78,20],['水田',null],['元芬',null],['上芬',null],
+    ['红山',116,20],['深圳北站',116,28],['梅林关',null],['翰岭',null],['银湖',120,58],['八卦岭',128,66],
+    ['体育中心',null],['科学馆',131,84]
+  ]},
+  L7:{ name:'7号线（西丽）', color:'#22D3EE', stations:[
+    ['西丽湖校区',46,40],['西丽湖',null],['西丽',56,45],['茶光',null],['珠光',null],['龙井',null],
+    ['桃源村',null],['深云',null],['安托山',93,65],['农林',null],['车公庙',101,84],['上沙',null],['沙尾',null],
+    ['石厦',107,92],['皇岗村',null],['福民',116,93],['皇岗口岸',122,98],['福邻',null],['红岭北',null],
+    ['八卦岭',128,66],['华新',126,76],['太安',168,80]
+  ]},
+  L8:{ name:'8号线（盐田）', color:'#A3E635', stations:[
+    ['莲塘',186,108],['梧桐山南',null],['沙头角',null],['海山',null],['盐田路',198,116],['盐田港西',null],
+    ['大梅沙',208,122],['小梅沙',215,128],['西涌',232,135]
+  ]},
+  L9:{ name:'9号线（梅林）', color:'#14B8A6', stations:[
+    ['前湾',29,88],['梦海',null],['怡海',null],['荔林',null],['南油',40,100],['南山书城',50,92],['深大南',null],
+    ['下沙',null],['红树湾南',78,92],['深圳湾公园',null],['上梅林',116,52],['莲花村',121,72],['红岭',137,80],['文锦',142,88]
+  ]},
+  L10:{ name:'10号线（坂田）', color:'#FBBF24', stations:[
+    ['福田口岸',116,102],['福民',116,93],['岗厦',121,84],['莲花村',121,72],['冬瓜岭',null],['孖岭',null],
+    ['雅宝',null],['南坑',null],['光雅园',null],['五和',134,32],['坂田北',null],['华为',140,22],['岗头',null],
+    ['甘坑',150,16],['凉帽山',null],['上李朗',null],['木古',null],['平湖',160,12],['双拥街',170,10]
+  ]},
+  L12:{ name:'12号线（宝安）', color:'#D97706', stations:[
+    ['左炮台东',2,130],['太子湾',null],['海上世界',28,113],['花果山',null],['四海',null],['南油',40,100],
+    ['南山书城',50,92],['桃园',61,84],['南头古城',null],['宝安中心',36,84],['黄田',16,72],['机场东',6,84],
+    ['海上田园东',4,40],['松岗',10,12]
+  ]},
+  L13:{ name:'13号线（石岩）', color:'#FDE047', stations:[
+    ['深圳湾口岸',50,104],['人才公园',null],['后海',58,96],['高新中',64,80],['上屋',69,18],['李松蓢',48,8]
+  ]},
+  L14:{ name:'14号线（东部快线）', color:'#94A3B8', stations:[
+    ['岗厦北',122,78],['黄木岗',null],['罗湖北',null],['布吉',160,62],['石芽岭',null],['六约北',null],
+    ['四联',null],['坳背',null],['大运',196,24],['嶂背',null],['南约',null],['沙田',240,40]
+  ]},
+  L16:{ name:'16号线（坪山）', color:'#6366F1', stations:[
+    ['园山西坑',168,14],['新联',null],['大运',196,24],['坪山',220,32],['田心',232,36]
+  ]}
+};
+
+/* 把 null 的坐标插值补齐：在相邻两个已知坐标之间按站序等分 */
+(function buildLines(){
+  for (const L of Object.values(LINES)){
+    const a = L.stations;
+    const anchors = [];
+    a.forEach((s,i)=>{ if (s[1]!=null && s[2]!=null) anchors.push(i); });
+    for (let k=0;k<anchors.length-1;k++){
+      const i0=anchors[k], i1=anchors[k+1], span=i1-i0;
+      for (let j=i0+1;j<i1;j++){
+        const t=(j-i0)/span;
+        a[j][1] = +((a[i0][1]) + (a[i1][1]-a[i0][1])*t).toFixed(2);
+        a[j][2] = +((a[i0][2]) + (a[i1][2]-a[i0][2])*t).toFixed(2);
+        a[j].auto = true;                       // 插值出来的站，画图时可以沿走线重新排开
+      }
+    }
+  }
+})();
+
+/* ============ 线路图画法：只走 横 / 竖 / 45° 斜线，拐弯处圆角（像官方线路网络图） ============
+   站点和线路数据不变：写了坐标的站、以及所有换乘站，位置固定不动；
+   相邻两个固定站之间用「斜线 + 直线」两段走线（已经是横 / 竖 / 45° 的就直接连），
+   中间插值出来的站沿走线等距排开。拐点存进 ROUTES，画线、画足迹都用它。 */
+const DOT_R = 9.75, HUB_R = 16.25;   // 站名避让用的圆点半径，px
+/* 市中心（车公庙—罗湖、深圳北—福田）站点最密：画图时把这一块横竖各拉开一些，
+   横向、纵向分开拉伸，所以横线还是横线、竖线还是竖线；海岸线也跟着一起拉 */
+const stretch = (v, a, b, k) => v<=a ? v : v>=b ? v+(b-a)*(k-1) : a+(v-a)*k;
+const WARP = (x, y) => [stretch(x, 98, 152, 1.7), stretch(y, 60, 100, 1.6)];
+const ROUTES = {};                   // lid -> [{x,y,name?}]（坐标单位）
+(function octilinear(){
+  for (const L of Object.values(LINES)) for (const s of L.stations){ const w=WARP(s[1], s[2]); s[1]=w[0]; s[2]=w[1]; }
+  const count = new Map();
+  for (const L of Object.values(LINES)) for (const s of L.stations) count.set(s[0], (count.get(s[0])||0)+1);
+  const fixed = new Map();
+  for (const L of Object.values(LINES)) for (const s of L.stations) if (!s.auto && !fixed.has(s[0])) fixed.set(s[0], [s[1], s[2]]);
+  // 换乘站在每条线里用同一个坐标
+  for (const L of Object.values(LINES)) for (const s of L.stations)
+    if (count.get(s[0])>1 && fixed.has(s[0])) { s[1]=fixed.get(s[0])[0]; s[2]=fixed.get(s[0])[1]; }
+  const isFixed = s => !s.auto || count.get(s[0])>1;
+  const anchors = [...fixed.entries()];
+  const drawn = [];                  // 已画好的其他线路线段，新线尽量别贴上去
+  const segDist = (p, a, b) => {
+    const dx=b[0]-a[0], dy=b[1]-a[1], L=dx*dx+dy*dy;
+    const t = L ? Math.max(0, Math.min(1, ((p[0]-a[0])*dx + (p[1]-a[1])*dy)/L)) : 0;
+    return Math.hypot(p[0]-a[0]-t*dx, p[1]-a[1]-t*dy);
+  };
+  const turn = (u, v) => {
+    const d = Math.abs(Math.atan2(u[0]*v[1]-u[1]*v[0], u[0]*v[0]+u[1]*v[1]))*180/Math.PI;
+    return d<1 ? 0 : d<46 ? 1 : d<91 ? 3 : 8;
+  };
+  for (const [lid, L] of Object.entries(LINES)){
+    const a = L.stations, own = new Set(a.map(s=>s[0]));
+    const pts = [{x:a[0][1], y:a[0][2], name:a[0][0]}];
+    let i0 = 0;
+    for (let i1=1; i1<a.length; i1++){
+      if (!isFixed(a[i1]) && i1<a.length-1) continue;
+      const A=[a[i0][1], a[i0][2]], B=[a[i1][1], a[i1][2]];
+      const dx=B[0]-A[0], dy=B[1]-A[1];
+      const ang = Math.abs(Math.atan2(dy, dx)*180/Math.PI) % 45, off = Math.min(ang, 45-ang);
+      let poly = [A, B];
+      if (off > 2){
+        const sx=Math.sign(dx), sy=Math.sign(dy), m=Math.min(Math.abs(dx), Math.abs(dy));
+        const prev = pts.length>1 ? [pts.at(-1).x-pts.at(-2).x, pts.at(-1).y-pts.at(-2).y] : null;
+        let best = null;
+        for (const X of [[A[0]+sx*m, A[1]+sy*m], [B[0]-sx*m, B[1]-sy*m]]){
+          let pen = prev ? turn(prev, [X[0]-A[0], X[1]-A[1]]) : 0;
+          for (const [n, q] of anchors)        // 别从别的线的站上穿过
+            if (!own.has(n) && Math.min(segDist(q, A, X), segDist(q, X, B)) < 1.4) pen += 6;
+          for (const t of [.2,.4,.6,.8]) for (const [P0, P1] of [[A, X], [X, B]]){
+            const q=[P0[0]+(P1[0]-P0[0])*t, P0[1]+(P1[1]-P0[1])*t];
+            if (drawn.some(([u, v]) => segDist(q, u, v) < 0.5)) pen += 2;   // 别和别的线叠在一起
+          }
+          if (!best || pen < best.pen) best = {pen, X};
+        }
+        poly = [A, best.X, B];
+      }
+      // 中间的站沿走线等距排开
+      const lens = []; let T = 0;
+      for (let k=1; k<poly.length; k++){ const l=Math.hypot(poly[k][0]-poly[k-1][0], poly[k][1]-poly[k-1][1]); lens.push(l); T+=l; }
+      const at = t => { let k=0; while (k<lens.length-1 && t>lens[k]){ t-=lens[k]; k++; }
+        const f = lens[k] ? t/lens[k] : 0; return [poly[k][0]+(poly[k+1][0]-poly[k][0])*f, poly[k][1]+(poly[k+1][1]-poly[k][1])*f]; };
+      const ev = [];
+      for (let k=1; k<poly.length-1; k++) ev.push({t:lens.slice(0,k).reduce((u,v)=>u+v,0), x:poly[k][0], y:poly[k][1]});
+      const span = i1-i0;
+      for (let j=1; j<span; j++){
+        const s=a[i0+j], q=at(T*j/span);
+        s[1]=+q[0].toFixed(3); s[2]=+q[1].toFixed(3);
+        ev.push({t:T*j/span, x:s[1], y:s[2], name:s[0]});
+      }
+      ev.sort((u, v) => u.t-v.t);
+      pts.push(...ev.map(({x, y, name}) => name ? {x, y, name} : {x, y}), {x:B[0], y:B[1], name:a[i1][0]});
+      i0 = i1;
+    }
+    ROUTES[lid] = pts;
+    for (let k=1; k<pts.length; k++) drawn.push([[pts[k-1].x, pts[k-1].y], [pts[k].x, pts[k].y]]);
+  }
+})();
+
+/* 建立站点索引 + 邻接表 */
+const stationMap = new Map();
+for (const [lid,L] of Object.entries(LINES)){
+  for (const [name,x,y] of L.stations){
+    if (!stationMap.has(name)) stationMap.set(name,{name,x,y,lines:[]});
+    stationMap.get(name).lines.push(lid);
+  }
+}
+/* 点击热区半径：按"最近的邻站"收缩，保证任意两站的热区互不重叠 —— 点谁中谁 */
+for (const st of stationMap.values()){
+  let m = Infinity;
+  for (const o of stationMap.values()){
+    if (o === st) continue;
+    const dd = Math.hypot(o.x-st.x, o.y-st.y)*S;
+    if (dd < m) m = dd;
+  }
+  st.hitR = Math.max(11, Math.min(22, m/2));
+}
+/* 终点站集合（用于只显示重要站名） */
+const TERMINI = new Set();
+for (const L of Object.values(LINES)){
+  TERMINI.add(L.stations[0][0]);
+  TERMINI.add(L.stations[L.stations.length-1][0]);
+}
+/* 按数据自动算 viewBox，不用手填 */
+const PAD = 30;
+let _x0=Infinity,_y0=Infinity,_x1=-Infinity,_y1=-Infinity;
+for (const st of stationMap.values()){
+  _x0=Math.min(_x0,st.x); _y0=Math.min(_y0,st.y);
+  _x1=Math.max(_x1,st.x); _y1=Math.max(_y1,st.y);
+}
+const MAPX=(_x0-PAD)*S, MAPY=(_y0-PAD)*S;
+const MAPW=(_x1-_x0+PAD*2)*S, MAPH=(_y1-_y0+PAD*2)*S;
+const MIDX=(_x0+_x1)/2;
+
+const adj = new Map();
+for (const [lid,L] of Object.entries(LINES)){
+  const arr = L.stations;
+  for (let i=0;i<arr.length;i++){
+    const cur = arr[i][0];
+    if (!adj.has(cur)) adj.set(cur,new Set());
+    if (i>0) adj.get(cur).add(arr[i-1][0]);
+    if (i<arr.length-1) adj.get(cur).add(arr[i+1][0]);
+  }
+}
+function bfs(from){
+  const dist = new Map([[from,0]]); const q=[from];
+  while(q.length){
+    const c=q.shift();
+    for(const n of (adj.get(c)||[])) if(!dist.has(n)){ dist.set(n,dist.get(c)+1); q.push(n); }
+  }
+  return dist;
+}
+const names = arr => arr.map(s=>s[0]);
+const lineArr = lid => names(LINES[lid].stations);
+
+/* 深圳地铁官方线路图式样：直线段 + 转角圆角（直线走站间，只在转弯处圆滑，不把整条线画成曲线） */
+function schematicPath(pts, r){
+  const n=pts.length;
+  if(n<2) return '';
+  if(n===2) return `M ${pts[0].x} ${pts[0].y} L ${pts[1].x} ${pts[1].y}`;
+  let d=`M ${pts[0].x} ${pts[0].y}`;
+  for(let i=1;i<n-1;i++){
+    const a=pts[i-1], b=pts[i], c=pts[i+1];
+    const la=Math.hypot(a.x-b.x, a.y-b.y)||1;
+    const lc=Math.hypot(c.x-b.x, c.y-b.y)||1;
+    const ra=Math.min(r, la/2);
+    const rc=Math.min(r, lc/2);
+    const ax=b.x+(a.x-b.x)/la*ra, ay=b.y+(a.y-b.y)/la*ra;
+    const cx=b.x+(c.x-b.x)/lc*rc, cy=b.y+(c.y-b.y)/lc*rc;
+    d+=` L ${ax.toFixed(1)} ${ay.toFixed(1)} Q ${b.x.toFixed(1)} ${b.y.toFixed(1)} ${cx.toFixed(1)} ${cy.toFixed(1)}`;
+  }
+  d+=` L ${pts[n-1].x} ${pts[n-1].y}`;
+  return d;
+}
+
+/* ============================ 话题词库 ============================ */
+const TOPICS = [
+  {id:'animal', name:'动物', emoji:'🐯', words:['猫','狗','老虎','狮子','大象','熊猫','兔子','小鱼','鱼','小鸟','鸟','马','牛','羊','猴子','长颈鹿','企鹅','恐龙','小鸡','鸭子','小猪','老鼠','狐狸','狗熊','黑熊','青蛙','蝴蝶','蚂蚁','蜜蜂','海豚','鲸鱼','鲨鱼','螃蟹','乌龟','孔雀','斑马','袋鼠','考拉','松鼠','刺猬','鳄鱼','河马','犀牛','骆驼','老鹰','猫头鹰','小狗','小猫','狗狗','猫咪','小鸭','海豹','海狮','水獭','企鹅','北极熊','狐狸','狼','鹿','梅花鹿','奶牛','黄牛','水牛','鸡','鸭','鹅','鸽子','麻雀','燕子','鹦鹉','啄木鸟','蝙蝠','蜘蛛','蚯蚓','蚕宝宝','知了','螳螂','蚂蚱','蝈蝈','天牛','蜗牛','蜈蚣','蝎子','海星','海马','海葵','珊瑚','海带','水母','章鱼','乌贼','龙虾','皮皮虾','扇贝','生蚝','蛤蜊','比目鱼','小丑鱼','海龟','鳄鱼龟','仓鼠','龙猫','荷兰猪','小香猪','羊驼','骆驼','鸵鸟','火烈鸟','天鹅','仙鹤','丹顶鹤','鸳鸯','海鸥','信天翁','猫鼬','穿山甲','食蚁兽','树懒','考拉','袋鼠','负鼠','浣熊','水豚','箭毒蛙','蟾蜍','蝾螈','娃娃鱼','电鳗','食人鱼','剑鱼','金枪鱼','带鱼','鱿鱼','小金鱼','锦鲤']},
+  {id:'food',   name:'食物', emoji:'🍎', words:['苹果','香蕉','西瓜','草莓','葡萄','橙子','桃子','蛋糕','面包','米饭','面条','饺子','包子','糖果','巧克力','冰淇淋','牛奶','鸡蛋','汉堡','薯条','饼干','粥','汤','水果','蔬菜','胡萝卜','土豆','西红柿','玉米','蘑菇','雪糕','奶茶','果汁','火腿','三明治','棒棒糖','甜甜圈','爆米花','梨','橘子','柚子','柠檬','芒果','菠萝','榴莲','荔枝','龙眼','桂圆','樱桃','车厘子','蓝莓','树莓','黑莓','桑葚','猕猴桃','奇异果','火龙果','哈密瓜','香瓜','甜瓜','木瓜','椰子','石榴','山竹','枇杷','杨梅','杏子','李子','梅子','枣','红枣','核桃','花生','栗子','板栗','腰果','开心果','杏仁','松子','瓜子','葵花籽','南瓜子','芝麻','豆浆','豆腐','豆干','腐竹','油条','烧饼','包子','馒头','花卷','烙饼','葱油饼','煎饼','米粉','河粉','年糕','汤圆','粽子','元宵','月饼','馄饨','云吞','烧麦','春卷','锅贴','肠粉','肠面','热干面','凉皮','肉夹馍','羊肉泡馍','烤肉','烤串','烤鱼','火锅','麻辣烫','串串香','冒菜','酸菜鱼','水煮鱼','宫保鸡丁','鱼香肉丝','番茄炒蛋','土豆丝','红烧肉','糖醋排骨','可乐','雪碧','芬达','橙汁','苹果汁','西瓜汁','芒果汁','柠檬水','蜂蜜水','酸奶','养乐多','咖啡','可可','热可可','布丁','果冻','慕斯','蛋挞','泡芙','马卡龙','寿司','拉面','咖喱','披萨','意面','沙拉','燕麦','麦片','藕粉','银耳汤','绿豆汤','红豆汤','酸梅汤','凉茶','龟苓膏','烧仙草','冰粉','刨冰','沙冰','奶昔','冰沙']},
+  {id:'vehicle',name:'交通工具', emoji:'🚗', words:['汽车','公交车','地铁','火车','飞机','自行车','轮船','出租车','卡车','消防车','救护车','警车','高铁','火箭','电动车','摩托车','缆车','热气球','滑板车','挖土机','拖拉机','压路机','吊车','起重机','叉车','推土机','搅拌车','洒水车','扫地车','垃圾车','邮车','货车','面包车','皮卡','SUV','吉普车','越野车','跑车','赛车','巴士','大巴','中巴','小巴','双层巴士','有轨电车','无轨电车','轻轨','磁悬浮','动车','绿皮火车','帆船','游艇','快艇','气垫船','皮划艇','独木舟','竹筏','木筏','乌篷船','龙船','龙舟','渔船','货轮','油轮','航母','潜水艇','直升机','战斗机','客机','运输机','热气球','飞艇','滑翔伞','滑翔翼','降落伞','无人机','平衡车','独轮车','三轮车','板车','手推车','婴儿车','轮椅','雪橇','滑雪板','雪地车','冰橇','沙地车','卡丁车','碰碰车','旋转木马','摩天轮','过山车','海盗船','跳楼机','漂流船']},
+  {id:'nature', name:'大自然', emoji:'🌳', words:['大树','树','花','小草','太阳','月亮','星星','云','下雨','雨','雪','风','山','河','大海','沙滩','石头','森林','公园','春天','夏天','秋天','冬天','天空','彩虹','叶子','种子','泥土','雪花','雾','霜','冰','闪电','打雷','雷阵雨','太阳雨','毛毛雨','大雨','暴雨','小雨','中雨','阴天','晴天','多云','刮风','大风','龙卷风','台风','飓风','海啸','洪水','干旱','沙漠','绿洲','草原','高原','盆地','峡谷','瀑布','溪流','小溪','河流','湖泊','池塘','水库','泉水','温泉','火山','雪山','冰山','冰川','北极','南极','赤道','森林','热带雨林','丛林','红树林','湿地','沼泽','珊瑚礁','山洞','溶洞','钟乳石','矿石','钻石','水晶','琥珀','珍珠','化石','陨石','岩石','花岗岩','大理石','沙子','黏土','泥巴','灰尘','花粉','花蜜','花苞','花蕾','花瓣','花蕊','树干','树皮','树根','树枝','树叶','年轮','松树','柏树','柳树','杨树','榕树','梧桐','银杏','枫树','竹子','松果','橡果','栗子','蒲公英','向日葵','玫瑰','月季','茉莉','桂花','樱花','桃花','梅花','荷花','兰花','菊花','郁金香','薰衣草','满天星','仙人掌','多肉','苔藓','蕨类','蘑菇','木耳','灵芝']},
+  {id:'family', name:'家人朋友', emoji:'👨‍👩‍👧', words:['爸爸','妈妈','爷爷','奶奶','外公','外婆','哥哥','姐姐','弟弟','妹妹','老师','同学','朋友','小朋友','医生','护士','警察','叔叔','阿姨','宝宝','宝贝','家人','舅舅','姑姑','伯伯','婶婶','姨父','姨妈','表哥','表姐','表弟','表妹','堂哥','堂姐','堂弟','堂妹','侄子','侄女','外甥','孙子','孙女','外孙','外公','外婆','岳父','岳母','公公','婆婆','老伴','邻居','同学','同桌','学长','学姐','学弟','学妹','校长','班主任','辅导员','教练','师傅','徒弟','老板','同事','合伙人','店长','服务员','收银员','保安','保洁','快递员','外卖员','司机','飞行员','船长','水手','潜水员','宇航员','科学家','工程师','程序员','设计师','画家','音乐家','舞蹈家','演员','歌手','作家','诗人','记者','编辑','摄影师','厨师','面包师','裁缝','木匠','铁匠','电工','水管工','花匠','园丁','农民','渔民','猎人','牧民','兽医','牙医','眼科医生','外科医生','中医','护士','药剂师','消防员','救生员','志愿者','军人','海军','空军','陆军','特种兵','探险家','登山家','旅行家','考古学家','地质学家','天文学家','生物学家','化学家','物理学家','数学家','哲学家','历史学家']},
+  {id:'school', name:'学校', emoji:'🎒', words:['学校','老师','同学','书包','铅笔','橡皮','课本','作业','考试','教室','操场','幼儿园','画画','唱歌','跳舞','读书','写字','数学','英语','积木','玩具','上课','下课','黑板','语文','算术','科学','美术','音乐','体育','手工','拼音','汉字','字母','单词','句子','课文','故事','童话','儿歌','谜语','古诗','朗诵','演讲','辩论','提问','回答','举手','发言','讨论','小组','队长','班长','学习委员','课代表','值日生','校服','红领巾','队徽','队旗','书包','文具盒','铅笔盒','卷笔刀','尺子','圆规','三角板','量角器','胶水','剪刀','彩笔','蜡笔','水彩','马克笔','荧光笔','笔记本','作业本','草稿纸','信纸','信封','邮票','字典','词典','百科全书','绘本','漫画','小说','杂志','报纸','地图','地球仪','显微镜','望远镜','放大镜','天平','烧杯','试管','酒精灯','电池','磁铁','电路','齿轮','杠杆','滑轮','斜面','弹簧','温度计','气压计','雨量器','风向标','日历','时钟','闹钟','沙漏','日晷','算盘','计算器','电脑','平板','投影仪','打印机','校园','校门','走廊','楼梯','电梯','图书室','阅览室','实验室','音乐室','美术室','电脑室','舞蹈室','体育馆','食堂','宿舍','厕所','医务室','传达室','升旗台','跑道','沙坑','单杠','双杠','秋千','滑梯','跷跷板','攀爬架','篮球架','足球门','乒乓球台','羽毛球网']},
+  {id:'sport',  name:'运动', emoji:'⚽', words:['足球','篮球','跑步','游泳','跳绳','骑车','爬山','滑冰','打球','羽毛球','乒乓球','运动','跳远','体操','轮滑','踢球','排球','网球','棒球','垒球','高尔夫','保龄球','台球','门球','毽球','水球','冰球','曲棍球','橄榄球','飞盘','飞镖','射箭','射击','击剑','柔道','跆拳道','空手道','拳击','摔跤','举重','体操','艺术体操','蹦床','跳水','花样游泳','水肺潜水','冲浪','帆板','滑水','皮划艇','赛艇','龙舟','攀岩','蹦极','跳伞','滑翔伞','登山','徒步','露营','定向越野','马拉松','铁人三项','骑马','马术','赛马','骑牛','斗牛','赛车','卡丁车','摩托艇','摩托艇','滑雪','单板滑雪','越野滑雪','雪橇','雪地行走','冰壶','冰球','花样滑冰','速度滑冰','短道速滑','太极拳','瑜伽','普拉提','健身','哑铃','杠铃','拉力器','俯卧撑','仰卧起坐','引体向上','深蹲','平板支撑','广播操','课间操','眼保健操','踢毽子','跳房子','丢沙包','拔河','捉迷藏','老鹰捉小鸡','木头人','丢手绢','击鼓传花','荡秋千','滑滑梯','跷跷板','翻跟头','侧手翻','下腰','劈叉','打滚','爬树','跳皮筋','转呼啦圈','抖空竹','放风筝','玩飞盘','踢球','投球','接球','传球','射门','投篮','扣球','发球','扣杀','拦网','防守','进攻','得分','犯规','裁判','哨子','记分牌','奖牌','金牌','银牌','铜牌','奖杯','冠军','亚军','季军']},
+  {id:'home',   name:'家里', emoji:'🏠', words:['家里','房间','床','沙发','电视','桌子','椅子','灯','门','窗','厨房','厕所','洗澡','睡觉','起床','吃饭','玩具','书','衣服','鞋子','袜子','帽子','地毯','冰箱','客厅','卧室','书房','阳台','走廊','玄关','储藏室','衣帽间','车库','院子','花园','菜园','鱼缸','鸟笼','狗窝','猫爬架','猫砂盆','食盆','水碗','玩具箱','书架','书桌','餐桌','茶几','床头柜','衣柜','鞋柜','橱柜','碗柜','冰箱','微波炉','烤箱','电饭煲','电压力锅','电磁炉','煤气灶','油烟机','洗碗机','消毒柜','净水器','热水壶','保温杯','咖啡机','榨汁机','豆浆机','破壁机','面包机','酸奶机','电饼铛','空气炸锅','蒸锅','炒锅','汤锅','奶锅','平底锅','砂锅','高压锅','刀','菜刀','水果刀','剪刀','削皮器','打蛋器','擀面杖','砧板','碗','盘子','碟子','筷子','勺子','叉子','杯子','玻璃杯','马克杯','吸管杯','保温杯','餐巾','围裙','手套','洗衣机','烘干机','熨斗','挂烫机','缝纫机','针线盒','纽扣','拉链','晾衣架','晾衣杆','吸尘器','扫地机器人','拖把','扫帚','簸箕','垃圾桶','垃圾袋','空调','风扇','暖气','电暖器','加湿器','除湿机','空气净化器','台灯','落地灯','吊灯','夜灯','闹钟','相框','镜框','梳子','发卡','发绳','皮筋','毛巾','浴巾','面巾','牙刷','牙膏','漱口杯','香皂','沐浴露','洗发水','护发素','洗手液','洗面奶','面霜','乳液','防晒霜','润唇膏','花露水','蚊香','蚊帐','驱蚊液','马桶','马桶盖','马桶刷','浴缸','淋浴头','花洒','浴帘','地垫','防滑垫','拖鞋','睡衣','睡裤','睡裙','被子','枕头','枕套','床单','被套','床垫','凉席','蚊帐','窗帘','百叶窗','窗纱','门帘','地毯','地垫','门垫','钥匙','锁','门铃','门禁卡','快递柜','信箱','楼梯','电梯','停车场','车位']},
+  {id:'space',  name:'太空', emoji:'🚀', words:['太空','宇宙','火箭','飞船','宇航员','星球','地球','火星','月亮','太阳','星星','陨石','黑洞','卫星','外星人','银河系','太阳系','水星','金星','木星','土星','天王星','海王星','冥王星','月球','空间站','航天飞机','探测器','火星车','月球车','太空服','头盔','推进器','燃料舱','太阳能板','天线','雷达','望远镜','哈勃','詹姆斯韦伯','空间站','天宫','嫦娥','玉兔','北斗','GPS','流星','彗星','流星雨','日食','月食','极光','北极光','星座','大熊座','小熊座','猎户座','天蝎座','处女座','天秤座','白羊座','金牛座','双子座','巨蟹座','狮子座','射手座','摩羯座','水瓶座','双鱼座','星图','星表','天文台','天文馆','宇航服','太空舱','登月舱','月球车','火星车','空间望远镜','射电望远镜','引力波','暗物质','暗能量','超新星','白矮星','中子星','脉冲星','类星体','星云','蟹状星云','猎户星云','马头星云','鹰状星云','创生之柱','银河','仙女座星系','麦哲伦云','宇宙大爆炸','宇宙膨胀','多元宇宙','时间旅行','虫洞','星际旅行','光速','曲率引擎','戴森球','外星生命','UFO','飞碟','不明飞行物','空间垃圾','太空碎片','微陨石','宇宙射线','太阳风','太阳耀斑','日冕','日珥','磁暴','极光','陨石坑','环形山']},
+  {id:'ocean',  name:'海洋', emoji:'🐠', words:['大海','海洋','小鱼','鱼','海豚','鲸鱼','鲨鱼','螃蟹','贝壳','珊瑚','沙滩','浪花','潜水','章鱼','水母','海龟','海盗','海马','海星','海葵','海带','龙虾','皮皮虾','扇贝','生蚝','蛤蜊','比目鱼','小丑鱼','锦鲤','旗鱼','剑鱼','金枪鱼','带鱼','鱿鱼','乌贼','墨鱼','章鱼','海螺','海贝','海星','海参','海胆','海獭','海豹','海狮','海象','海牛','儒艮','鲸鲨','虎鲸','白鲸','一角鲸','蓝鲸','座头鲸','抹香鲸','灰鲸','海鸥','信天翁','军舰鸟','鹈鹕','海燕','企鹅','帝企鹅','阿德利企鹅','帽带企鹅','小蓝企鹅','北极熊','海象','海狗','海驴','儒艮','美人鱼','海怪','大章鱼','大王乌贼','克拉肯','海龙','海马','海牛','海龟','棱皮龟','玳瑁','绿海龟','赤蠵龟','丽龟','平背龟','珊瑚','软珊瑚','硬珊瑚','鹿角珊瑚','脑珊瑚','蘑菇珊瑚','柳珊瑚','海扇','海鞭','海绵','海鞘','海兔','海蛞蝓','裸鳃类','海蝴蝶','翼足类','有孔虫','放射虫','硅藻','甲藻','绿藻','红藻','褐藻','蓝藻','浮游生物','磷虾','丰年虫','轮虫','桡足类','端足类','涟虫','糠虾','磷虾','樱虾','毛虾','糠虾','赤潮','绿潮','水华','珊瑚白化','海洋酸化','海平面上升','洋流','厄尔尼诺','拉尼娜','黑潮','暖流','寒流','上升流','下降流','潮汐','涨潮','退潮','大潮','小潮','潮间带','浅海','深海','海沟','马里亚纳海沟','海岭','海山','海底火山','热液口','冷泉','海底峡谷','大陆架','大陆坡','深海平原','海盆']},
+  {id:'music',  name:'音乐', emoji:'🎵', words:['唱歌','歌','音乐','钢琴','吉他','鼓','小提琴','跳舞','声音','喇叭','儿歌','节奏','音符','口琴','电子琴','手风琴','萨克斯','长笛','单簧管','双簧管','巴松','圆号','小号','长号','大号','竖琴','古筝','琵琶','二胡','笛子','萧','唢呐','笙','扬琴','柳琴','中阮','古琴','编钟','木琴','马林巴','颤音琴','钟琴','锣','钹','三角铁','铃鼓','沙锤','响板','木鱼','梆子','板鼓','堂鼓','大鼓','小军鼓','架子鼓','非洲鼓','钢鼓','手鼓','尤克里里','贝斯','竖笛','口风琴','拇指琴','卡林巴','陶笛','排箫','口弦','牛角号','海螺号','小夜曲','摇篮曲','进行曲','圆舞曲','交响曲','协奏曲','奏鸣曲','变奏曲','幻想曲','狂想曲','前奏曲','夜曲','即兴曲','咏叹调','宣叙调','合唱','重唱','独唱','轮唱','齐唱','伴奏','独奏','重奏','合奏','爵士','布鲁斯','摇滚','流行','古典','民谣','乡村','电子','嘻哈','说唱','雷鬼','拉丁','探戈','桑巴','伦巴','恰恰','斗牛舞','华尔兹','狐步','快步','探戈','街舞','霹雳舞','机械舞','锁舞','甩手舞','爵士舞','肚皮舞','草裙舞','芭蕾','现代舞','民族舞','广场舞','扇子舞','手绢花','秧歌','腰鼓','舞龙','舞狮','踩高跷','变脸','皮影','木偶戏','手影戏']},
+  {id:'color',  name:'颜色', emoji:'🌈', words:['红色','黄色','蓝色','绿色','紫色','橙色','粉色','黑色','白色','灰色','棕色','彩虹','颜色','金黄','玫红','玫红色','桃红','粉红','浅粉','深粉','浅蓝','深蓝','天蓝','海蓝','湖蓝','宝蓝','宝蓝色','藏蓝','藏青','墨绿','翠绿','草绿','嫩绿','浅绿','深绿','橄榄绿','墨绿','松绿','茶绿','柠檬黄','鹅黄','米黄','土黄','橙黄','橘黄','杏色','驼色','卡其','咖啡色','巧克力色','酱紫','浅紫','深紫','藕荷色','薰衣草紫','银色','银灰','铅灰','烟灰','炭灰','青色','青灰','藏蓝','藏青','花色','碎花','格子','条纹','圆点','豹纹','斑马纹','五颜六色','色彩斑斓','五彩缤纷','姹紫嫣红','万紫千红','绚丽多彩','鲜艳','暗淡','明亮','柔和','刺眼','温暖','冷色调','暖色调','对比色','互补色','邻近色','渐变色','荧光色','珠光色','金属色','哑光','亮面','磨砂','磨砂色','透明','半透明','不透明','珠光','炫彩','梦幻色','莫兰迪色']},
+  {id:'number', name:'数字', emoji:'🔢', words:['一','二','三','四','五','六','七','八','九','十','数字','数数','一百','加法','减法','个数','十一','十二','十三','十四','十五','十六','十七','十八','十九','二十','二十一','二十二','三十','四十','五十','六十','七十','八十','九十','一百','二百','三百','五百','一千','一万','十万','百万','千万','亿','零','百','千','万','乘法','除法','加减乘除','等于','大于','小于','不等于','大约','差不多','整数','小数','分数','百分数','百分比','比例','倍数','两倍','三倍','一半','三分之一','四分之一','几分之一','第一','第二','第三','倒数第一','最后','中间','旁边','左右','前后','上下','内外','排列','顺序','倒序','正序','随机','规律','奇数','偶数','质数','合数','正数','负数','正负','零度','绝对值','估算','估算一下','大约多少','差不多多少','好多','好几个','好几十','好几百','好几万','无数','数不清','数一数','数一数二','数数看','数到十','数到一百','一只','两只','三只','四只','五只','一只小鸟','两条鱼','三朵花','四棵树','五片叶子','六块石头','七颗星星','八只蚂蚁','九只蝴蝶','十只蜜蜂']},
+  {id:'body',   name:'身体', emoji:'👋', words:['手','脚','头','眼睛','鼻子','嘴巴','耳朵','牙齿','头发','肚子','腿','胳膊','手指','脸','身体','膝盖','肩膀','脖子','下巴','额头','眉毛','睫毛','酒窝','虎牙','门牙','臼齿','乳牙','恒牙','舌头','嘴唇','脸颊','耳垂','耳屎','鼻涕','眼泪','口水','汗','汗水','指甲','指纹','掌纹','手心','手背','拳头','手掌','手腕','手肘','手臂','上臂','前臂','腋下','脊背','后背','腰','屁股','尾骨','锁骨','肩胛骨','肋骨','胸骨','胸','心脏','肺','胃','肝','胆','脾','肾','肠','大肠','小肠','盲肠','阑尾','膀胱','食道','气管','血管','动脉','静脉','毛细血管','神经','脊髓','大脑','小脑','脑干','延髓','丘脑','海马体','左脑','右脑','左半身','右半身','左半脑','右半脑','骨骼','骨架','骨头','软骨','关节','韧带','肌腱','肌肉','肱二头肌','肱三头肌','腹肌','胸肌','背肌','臀肌','股四头肌','小腿肚','跟腱','足弓','足底','脚趾','脚跟','脚背','脚踝','脚腕','脚底','脚心','脚掌','大拇指','二拇指','中指','无名指','小拇指','虎口','生命线','智慧线','感情线','掌纹','指纹','手印','脚印','身长','身高','体重','三围','头围','胸围','腰围','臀围','裤子尺码','上衣尺码','鞋码','手套','围巾','帽子','口罩','眼镜','墨镜','太阳镜','眼罩','耳塞','耳罩','手表','手环','手链','戒指','项链','耳环','耳钉','发卡','发带','头绳','徽章','胸针','皮带','腰带','领带','领结','蝴蝶结','校徽']},
+  {id:'bug',    name:'昆虫', emoji:'🐛', words:['蚂蚁','蜜蜂','蝴蝶','蜻蜓','瓢虫','蜘蛛','蜗牛','毛毛虫','知了','蟋蟀','昆虫','虫子','萤火虫','蚜虫','天牛','金龟子','独角仙','锹甲','龙虱','水黾','负子蝽','仰泳蝽','田鳖','螳螂','蚂蚱','蝗虫','蝈蝈','纺织娘','灶马','蟑螂','白蚁','蚂蚁','红火蚁','行军蚁','切叶蚁','蜜蚁','放屁虫','椿象','臭大姐','网蝽','盲蝽','叶蝉','飞虱','蚧壳虫','粉虱','蓟马','石蝇','草蛉','蚁蛉','蛇蛉','螳蛉','脉翅目','蛇蛉目','广翅目','捻翅目','跳虫','原尾虫','双尾虫','缨尾虫','蜉蝣','蜻蜓','豆娘','色蟌','蟌','石蛾','毛翅目','鳞翅目','蝴蝶','蛾子','天蛾','蚕蛾','灯蛾','尺蛾','夜蛾','舟蛾','刺蛾','毒蛾','枯叶蛾','蛱蝶','凤蝶','粉蝶','灰蝶','蚜蝶','眼蝶','斑蝶','环蝶','闪蝶','大闪蝶','蓝闪蝶','君主斑蝶','金斑蝶','虎甲','步甲','龙虱','水龟虫','隐翅虫','埋葬虫','叩头虫','吉丁虫','长蠹','皮蠹','蛛甲','拟步甲','芫菁','地胆','瘤蛛甲','蚁甲','葬甲','球蠊','蜚蠊','螳螂','蠼螋','纺足虫','蛩蠊','缺翅虫','啮虫','食毛目','虱目','缨尾目','石蛃目','衣鱼','跳蚤','虱子','蜱','螨','恙螨','疥螨','尘螨','粉螨','叶螨','红蜘蛛','棉红蜘蛛','二斑叶螨','朱砂叶螨','柑橘红蜘蛛','苹果红蜘蛛','山楂叶螨','葡萄叶螨','茶橙瘿螨','栗瘿螨','荔枝瘿螨','枸杞瘿螨']}
+];
+const RELATED = {
+  animal:['ocean','nature','food','bug','family','school','body'],
+  food:['animal','nature','home','family','color'],
+  vehicle:['space','nature','ocean','family','school'],
+  nature:['animal','food','ocean','space','color','bug'],
+  family:['home','school','animal','food','body','sport'],
+  school:['family','sport','music','number','color'],
+  sport:['school','family','home','nature','body'],
+  home:['family','food','school','body'],
+  space:['nature','vehicle','number','ocean'],
+  ocean:['animal','nature','space','bug'],
+  music:['school','sport','family'],
+  color:['nature','school','number','food'],
+  number:['school','space','color'],
+  body:['family','home','sport','animal'],
+  bug:['animal','nature','ocean']
+};
+const STOPCHARS = new Set(('的了我在有和就也都要到上下里个们这那不会说去着过吗呢吧啊呀哦把被给让还再又今天因为所以然后但是喜欢想看是很大小好多一点我们你们他们什么可以').split(''));
+
+/* ==================== 说话打分：按 4 岁半孩子的表达水平 ==================== */
+/* 判分思路（对照用户给的锚点）：
+     「蚂蚁蚂蚁蚂蚁」 只重复同一个词 → 约 60 分（勉强及格）
+     「蚂蚁六条腿」   事物 + 数量 + 部位 → 约 80 分
+     再加动作/在哪儿/感受等描述 → 越具体越高，满分 100            */
+const DESC_GROUPS = [
+  {key:'num',  label:'数量',     w:['一','二','三','四','五','六','七','八','九','十','两','几','很多','好多','一些','一共','全部','好几','半','好多只','好多条']},
+  {key:'color',label:'颜色',     w:['红色','红色','红','黄色','黄','蓝色','蓝','绿色','绿','紫色','紫','橙色','橙','粉色','粉','黑色','黑','白色','白','灰色','灰','棕色','彩色','彩虹','金色','五颜六色']},
+  // 注意：大小形状只收两字词和叠词。单个「大 / 小 / 长」太容易命中（「小蚂蚁」就算一个），会虚高。
+  {key:'shape',label:'大小形状', w:['很大','很小','好大','好小','大大的','小小的','这么大','这么小','长长','短短','高高','矮矮','胖胖','瘦瘦','圆圆','尖尖','粗粗','细细','扁扁','弯弯','长长的','厚厚的','圆','方','扁','弯']},
+  {key:'act',  label:'动作',     w:['跑','跳','飞','爬','游','走','吃','喝','睡','叫','唱','搬','挖','追','躲','找','玩','看','听','说','想','做','开','坐','站','拿','放','洗','穿','画','写','读','抱','拉','推','抓','咬','吐','摇','晃','滚','滑','钻','回家','回来','出去']},
+  {key:'place',label:'在哪儿',   w:['树上','树下','地上','地下','水里','天上','家里','学校','公园','房间','厨房','桌上','床上','超市','动物园','海边','山上','花园','路上','门口','外面','旁边','中间','前面','后面','上面','下面','这里','那里']},
+  {key:'feel', label:'感受',     w:['喜欢','最爱','爱','怕','害怕','开心','高兴','难过','生气','好吃','好喝','好看','好听','可爱','漂亮','香','甜','臭','烫','冷','热','舒服','厉害','有趣','好玩','温柔','凶','香喷喷']},
+  {key:'part', label:'组成部分', w:['腿','脚','翅膀','头','眼睛','耳朵','嘴巴','尾巴','壳','角','毛','牙齿','身体','肚子','手','手指','刺','背','脖子','鼻子','脸']},
+  {key:'cmp',  label:'像什么',   w:['好像','就像','像','变成','假装','一样','长得像']}
+];
+const LINK_WORDS = ['因为','所以','然后','但是','而且','一边','还有','就是','有的','还会','可以','接着','后来','先','再','最后','有','在'];
+
+function scoreUtterance(text){
+  const t=(text||'').trim();
+  const n=[...t].length;
+  const parts=[];
+
+  // 实词 = 命中的话题词 + 命中的描述词
+  const topicWords=[...new Set(matchTopics(t).map(h=>h.word))];
+  const content=new Set(topicWords);
+  const descs=[];
+  for (const g of DESC_GROUPS){
+    const hit=g.w.find(w=>t.includes(w));
+    if (hit){ descs.push(g.label); content.add(hit); }
+  }
+  const distinct=content.size;
+
+  // 重复啰嗦：同一个词说了好几遍
+  let extra=0;
+  for (const w of topicWords){
+    let c=0,i=0; while((i=t.indexOf(w,i))!==-1){ c++; i+=w.length; }
+    if (c>1) extra += c-1;
+  }
+  const onlyOne = distinct<=1 && n>=4;
+
+  // 分值标定（对着锚点调出来的）：
+  //   「蚂蚁蚂蚁蚂蚁」→ 60    「蚂蚁六条腿」→ 80    描述越丰富越往上，99 封顶
+  let s=50;
+  let lenV, lenK;
+  if (n<=3){       lenV=-10; lenK='只有 '+n+' 个字，太短啦'; }
+  else if (n<=6){  lenV=10;  lenK='说了 '+n+' 个字'; }
+  else if (n<=10){ lenV=12;  lenK='说了 '+n+' 个字，是一句完整的话'; }
+  else if (n<=16){ lenV=13;  lenK='说了 '+n+' 个字，挺长的一句'; }
+  else if (n<=22){ lenV=14;  lenK='说了 '+n+' 个字，好长的一句'; }
+  else if (n<=30){ lenV=16;  lenK='说了 '+n+' 个字，讲得好多呀'; }
+  else {           lenV=18;  lenK='说了 '+n+' 个字，简直是长故事'; }
+  s+=lenV; parts.push({v:lenV, k:lenK});
+
+  const dv=Math.min(13, distinct*3);
+  s+=dv; parts.push({v:dv, k:'用了 '+distinct+' 个不同的词'});
+
+  if (descs.length){
+    const dsv=Math.min(12, +(descs.length*3.2).toFixed(1));
+    s+=dsv; parts.push({v:dsv, k:'多说了'+descs.join('、')});
+  }
+  const hasLink=LINK_WORDS.some(w=>t.includes(w));
+  if (hasLink){ s+=4; parts.push({v:4,k:'把话连成了一句'}); }
+  s+=5;   // 能进站就说明和话题相关
+
+  if (extra){ const p=-Math.min(12, extra*3); s+=p; parts.push({v:p,k:'同一个词重复了好几遍'}); }
+  if (onlyOne){ s-=2; parts.push({v:-2,k:'整句基本只有一个词'}); }
+
+  s=Math.max(0,Math.min(100,Math.round(s)));
+  const lv = s>=90?{t:'表达小达人',e:'🌟'} : s>=80?{t:'说得很清楚',e:'🎉'}
+           : s>=70?{t:'不错哦',e:'👍'}     : s>=60?{t:'勉强及格',e:'🙂'}
+                  :{t:'再试试多说一点',e:'🌱'};
+  return {score:s, level:lv.t, emoji:lv.e, parts, descs, distinct, chars:n};
+}
+
+/* 可选：接真 AI 打分（OpenAI 兼容接口）。没配置就只用上面的本地规则，离线也能玩。 */
+const CFG_KEY='yy-metro-cfg';
+const defaultCfg=()=>({mode:'local', endpoint:'https://api.openai.com/v1', key:'', model:'gpt-4o-mini'});
+let cfg=defaultCfg();
+try{ Object.assign(cfg, JSON.parse(localStorage.getItem(CFG_KEY)||'{}')); }catch(_){}
+const saveCfg=()=>{ try{ localStorage.setItem(CFG_KEY, JSON.stringify(cfg)); }catch(_){} };
+
+/* 服务器共享 AI 配置：Mac 在网页里填一次 → 存到服务器 ai-config.json，
+   之后 iPad / 其他设备打开同一地址读它，就能共用同一个 Key（局域网内） */
+async function loadServerCfg(){
+  try{
+    const r=await fetch('ai-config.json', {cache:'no-store'});
+    if(!r.ok) return;
+    const s=await r.json();
+    if(s && s.key){
+      // 服务器上有共享 Key：填进来，这样换设备不用重填
+      cfg.endpoint=(s.endpoint||cfg.endpoint||defaultCfg().endpoint).trim();
+      cfg.key=(s.key||'').trim();
+      cfg.model=(s.model||cfg.model||defaultCfg().model).trim();
+      // 本机没存过自己的设置 → 直接开 AI；存过就尊重本机的模式选择
+      if (!localStorage.getItem(CFG_KEY)) cfg.mode='ai';
+      saveCfg();
+      updateCfgBtn();
+    }
+  }catch(e){}
+}
+async function pushServerCfg(){
+  try{
+    const r=await fetch('save-ai-config', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({endpoint:cfg.endpoint, key:cfg.key, model:cfg.model})
+    });
+    return r.ok;
+  }catch(e){ return false; }
+}
+loadServerCfg();
+
+/* Amp 沙盒版：页面旁边有 Amp 插件提供的 api/chat 时，对话直接走 Amp AI，不用填 Key；
+   局域网版没有这个接口，照旧用上面的设置 */
+let ampAI=false;
+const AMP_HOSTED_URL='https://t-03h0v1osrgimx4dfbannswyrr-p23218.onamp.dev/';   // Amp 托管的同款游戏
+const LAN_URL='https://192.168.3.88:8727/youyou-metro-topic-game.html';
+fetch('api/health',{cache:'no-store'}).then(r=>r.ok?r.json():null)
+  .then(j=>{ if(j&&j.amp){
+    ampAI=true; updateCfgBtn();
+    $('homeBtn').href=new URL('index.html', LAN_URL).href;   // Amp 托管版没有主页，「🏠 主页」回局域网主页（唯一入口）
+  } }).catch(()=>{});
+
+async function aiScore(text, topicName){
+  const body={
+    model: cfg.model,
+    temperature: 0.2,
+    messages:[
+      {role:'system', content:'你是幼儿园中班老师，只输出一行 JSON，不要任何解释。'},
+      {role:'user', content:
+`请用【4岁半孩子】的标准给这句话打分，0-100 分。不要用小学生或大人的标准。
+
+本轮话题：${topicName||'不限'}
+孩子说的话：${text}
+
+评分锚点（请严格对齐）：
+- 只是把同一个词翻来覆去说（如「蚂蚁蚂蚁蚂蚁」）→ 60 分左右
+- 说清了事物 + 1~2 个具体描述（如「蚂蚁六条腿」）→ 80 分左右
+- 描述越丰富（数量、颜色、大小、动作、在哪儿、感受、像什么，说得越具体）→ 越高，最高 100
+- 只有一两个字、说不完整 → 60 分以下
+重复啰嗦要扣分；有具体描述要大方给分。
+
+只返回：{"score": 整数, "comment": "给爸妈看的点评，20 字以内"}`}
+    ]
+  };
+  const r=await fetch(cfg.endpoint.replace(/\/+$/,'')+'/chat/completions',{
+    method:'POST',
+    headers:{'Content-Type':'application/json','Authorization':'Bearer '+cfg.key},
+    body:JSON.stringify(body)
+  });
+  if(!r.ok) throw new Error('HTTP '+r.status);
+  const j=await r.json();
+  let txt=j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content || '';
+  txt=txt.trim().replace(/^```(?:json)?/i,'').replace(/```$/,'').trim();
+  let o=null;
+  try{ o=JSON.parse(txt); }catch(_){ const m=txt.match(/"score"\s*:\s*(\d+)/); if(m) o={score:+m[1]}; }
+  if(!o || typeof o.score!=='number') throw new Error('返回格式不对');
+  const s=Math.max(0,Math.min(100,Math.round(o.score)));
+  const lv = s>=90?{t:'表达小达人',e:'🌟'} : s>=80?{t:'说得很清楚',e:'🎉'}
+           : s>=70?{t:'不错哦',e:'👍'}     : s>=60?{t:'勉强及格',e:'🙂'}
+                  :{t:'再试试多说一点',e:'🌱'};
+  return {score:s, level:lv.t, emoji:lv.e, comment:o.comment||'', parts:[{v:0,k:'AI 点评：'+(o.comment||'—')}], descs:[], distinct:0, chars:[...text].length, byAI:true};
+}
+
+function levelOf(s){
+  return s>=90?{t:'表达小达人',e:'🌟'} : s>=80?{t:'说得很清楚',e:'🎉'}
+       : s>=70?{t:'不错哦',e:'👍'}     : s>=60?{t:'勉强及格',e:'🙂'}
+              :{t:'再试试多说一点',e:'🌱'};
+}
+
+/* AI 对话：读内容 → 判定相关/说得好 → 打分 → 回复一句接着往下聊 */
+async function aiChat(text, topicName){
+  const hist=(state.convo||[]).slice(-8).map(m=>`${m.role==='kid'?'佑佑':'小火车'}：${m.text}`).join('\n');
+  const body={
+    model: cfg.model, temperature: 0.7,
+    messages:[
+      {role:'system', content:'你是「小火车」，是陪佑佑玩深圳地铁游戏、练口语的小伙伴。你要做三件事：1) 判断佑佑这句话跟当前话题相不相关、说得好不好；2) 按 4 岁半标准打分；3) 用一句简单又好玩的短话回应，接着话题往下聊（可以追问一个细节，或提一个相关的小问题）。佑佑说的内容跟之前重复要明显扣分。重要：如果佑佑上一句之后你（小火车）问了他一个问题，而他这一句是在回答那个问题（哪怕他提到的词属于别的话题，比如你问「你喜欢骑车去哪里？」他答「去高铁站」），也要算相关、ok=true。'
+        +'答案对不对：如果你上一句问的是有标准答案的问题（算术、数数、简单常识，比如「88 加 2 等于几」），佑佑答错了也照样 ok=true（游戏继续，别打断聊天），但分数要低一些（不超过 70），reply 里先温柔地纠正，比如「差一点点哦，88 加 2 是 90～」，再接着聊；答对了就夸他答对了。绝不能把错的答案说成对的。'
+        +'提问要适合 4 岁半：只问他能答上来的，比如数一数、颜色、动物、身边的东西；算术题里出现的每个数字都不能超过 10（比如「3 加 2」「5 减 1」），就算前面的题数字很大，下一题也要换回 10 以内，绝不出两位数的题。只输出一行 JSON，不要任何解释。'},
+      {role:'user', content:
+`当前话题：${topicName||'不限'}
+对话历史（可能为空）：
+${hist||'（刚开始，还没有）'}
+
+小火车上一句（如果上一句是你在提问，佑佑这句很可能是在回答你的问题）：${(state.lastReply||'（还没有）')}
+
+孩子刚刚说：${text}
+
+评分锚点：只是重复同一个词（如「蚂蚁蚂蚁蚂蚁」）≈60 分；说清事物+描述（如「蚂蚁六条腿」）≈80 分；描述越具体越高，最高 100。说重复的内容要扣分。如果孩子这句是在回答你上一句的提问，请判 ok=true 并给合理分数；你上一句如果是有标准答案的题，先自己算出正确答案，孩子答错就温柔纠正、分数不超过 70，答对就夸他。你的 reply 里如果要再出算术题，每个数字都不能超过 10。
+
+只返回：{"ok": true或false, "score": 整数, "comment": "给爸妈看的点评20字内", "reply": "你对孩子说的一句话，20字内，要接着话题往下聊"}`}
+    ]
+  };
+  let o=null;
+  if (ampAI){
+    const r=await fetch('api/chat',{method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({system:body.messages[0].content, prompt:body.messages[1].content})});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    o=await r.json();
+  } else {
+    const r=await fetch(cfg.endpoint.replace(/\/+$/,'')+'/chat/completions',{
+      method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+cfg.key},
+      body:JSON.stringify(body)
+    });
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const j=await r.json();
+    let txt=j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content || '';
+    txt=txt.trim().replace(/^```(?:json)?/i,'').replace(/```$/,'').trim();
+    try{ o=JSON.parse(txt); }catch(_){}
+  }
+  if(!o || typeof o.score!=='number') throw new Error('返回格式不对');
+  return {
+    ok: o.ok!==false,
+    score: Math.max(0,Math.min(100,Math.round(o.score))),
+    comment: (o.comment||'').trim(),
+    reply: (o.reply||'').trim()
+  };
+}
+
+/* 本地离线回复：没接 AI 时也给一句简单的接着聊 */
+function localReply(topicName){
+  const t=(topicName&&topicName!=='不限')?`和「${topicName}」有关的`:'';
+  const pool=[
+    `那它还有什么特点呀？`,
+    `它是什么颜色的？喜欢吃什么呀？`,
+    `还有呢？再说一个${t}吧！`,
+    `它在哪儿生活呀？`,
+    `它长什么样子？给我多讲讲～`
+  ];
+  return pool[Math.floor(Math.random()*pool.length)];
+}
+
+/* 重复检测：跟之前说过的内容一样（或高度相似）就返回 true */
+function isRepeat(text){
+  const t=text.trim(); if(t.length<2) return false;
+  for (const l of state.log){
+    const p=(l.text||'').trim(); if(!p) continue;
+    if (t===p) return true;
+    const a=[...new Set(t)], b=[...new Set(p)];
+    const common=a.filter(c=>b.includes(c)).length;
+    if (a.length && common/Math.max(a.length,b.length)>=0.7) return true;
+  }
+  return false;
+}
+
+function matchTopics(text){
+  const hits=[];
+  for (const t of TOPICS) for (const w of t.words) if (text.includes(w)) hits.push({id:t.id,name:t.name,emoji:t.emoji,word:w,len:w.length});
+  hits.sort((a,b)=>b.len-a.len);
+  return hits;
+}
+function sharedChars(a,b){
+  const sa = new Set([...a].filter(c=>!STOPCHARS.has(c) && c.trim()));
+  return [...new Set([...b])].filter(c=>!STOPCHARS.has(c) && c.trim() && sa.has(c));
+}
+const emojiOf = id => (TOPICS.find(t=>t.id===id)||{emoji:'💬'}).emoji;
+
+/* ============================ 游戏状态 ============================ */
+const state = {
+  phase:'setup', cur:null, line:null, dir:1, dest:null,
+  prev:null, path:[], energy:5, chain:[], allowNew:false, atHub:false, turns:0,
+  startTopic:null,
+  askTopic:false,   // 开局等孩子说出想聊的话题
+  log:[],          // 每句话的记录，用于最后导出
+  convo:[],        // 对话历史（喂给 AI 的上下文，只保留最近几句）
+  lastReply:null,  // 佑佑（AI）最近一句回复，显示给小朋友接着聊
+  goodStreak:0,    // 连续高分，攒够回一点能量
+  busy:false,      // 列车行驶动画期间锁住输入
+  startedAt:0      // 开局时间，结算时算用时
+};
+let lastReport=null;
+const rollTopic = () => TOPICS[Math.floor(Math.random()*TOPICS.length)];
+const topicExamples = t => t.words.filter(w=>w.length>=2).slice(0,3).join('、');
+// 话题语音播报：把话题变成一句好听的提问，并随手举个具体例子（如「老虎哪里最让你喜欢呀？」）
+function topicQuestion(t){
+  const name = (t && t.name) || '这个话题';
+  const ws = (t && t.words) ? t.words.filter(w=>w.length>=2 && w!==name) : [];
+  const ex = ws.length ? ws[Math.floor(Math.random()*ws.length)] : '';
+  const pool = ex
+    ? [
+        `本轮话题是「${name}」！比如${ex}，${ex}哪里最让你喜欢呀？`,
+        `我们来聊「${name}」吧！你最喜欢${ex}的什么地方呀？`,
+        `「${name}」时间到～说说看，你为什么这么喜欢${ex}呀？`
+      ]
+    : [
+        `本轮话题是「${name}」！${name}里你最喜欢哪个呀？`,
+        `我们来聊「${name}」吧！你最喜欢${name}里的什么呀？`
+      ];
+  return pool[Math.floor(Math.random()*pool.length)];
+}
+
+/* ============================ 深圳地图背景（卡通风格） ============================ */
+function bgSvg(){
+  const px = v => +(v*S).toFixed(1);
+  const poly = a => a.map(p=>WARP(p[0],p[1]).map(px).join(',')).join(' ');
+  let h = '';
+  // 官方线路网络图式样：陆地白色、海淡蓝，只留几个淡淡的地名
+  h += `<rect x="${px(-40)}" y="${px(-40)}" width="${px(360)}" height="${px(270)}" fill="#F6F7F8"/>`;
+  const sea = [[-40,220],[300,220],[300,130],[232,137],[206,126],[176,115],[146,108],[116,105],[86,107],[56,110],[30,115],[12,123],[0,119],[-40,119]];
+  h += `<polygon points="${poly(sea)}" fill="#D4ECF7"/>`;
+  const land = [[0,16],[42,9],[92,7],[142,9],[192,11],[238,18],[240,48],[238,88],[236,120],[232,137],
+                [206,126],[176,115],[146,108],[116,105],[86,107],[56,110],[30,115],[12,123],[0,119],[0,60]];
+  h += `<polygon points="${poly(land)}" fill="#FFFFFF" stroke="#C9E3EF" stroke-width="3" stroke-linejoin="round"/>`;
+  for (const [name,x0,y0,size] of [['东莞',60,-6,26],['惠州',200,-4,26],['深圳湾',36,140,22],['大鹏湾',214,150,22],['香港',120,150,22]]){
+    const [x,y]=WARP(x0,y0);
+    h += `<text x="${px(x)}" y="${px(y)}" text-anchor="middle" font-size="${size}" fill="#B5C3CF" font-weight="600" letter-spacing="4">${name}</text>`;
+  }
+  return `<g id="bg">${h}</g>`;
+}
+
+/* ============================ 地图渲染 ============================ */
+/* 并排画法：两条线走同一段时（比如 4 号线和 10 号线的 福田口岸—福民），像官方图那样一条挨一条并排画，不叠在一起 */
+const LINE_W = 7;
+let DRAW = null;                     // lid -> 并排偏移后的折线点（px）
+const SEGS = [];                     // 所有画出来的线段（px），站名避让用
+function buildDraw(){
+  const lids = Object.keys(LINES), px = lid => ROUTES[lid].map(q=>({x:q.x*S, y:q.y*S, name:q.name}));
+  const segs = [];
+  for (const lid of lids){
+    const p = px(lid);
+    for (let i=1; i<p.length; i++){
+      const a=p[i-1], b=p[i], L=Math.hypot(b.x-a.x, b.y-a.y); if (!L) continue;
+      let dx=(b.x-a.x)/L, dy=(b.y-a.y)/L;
+      if (dx<-1e-6 || (Math.abs(dx)<1e-6 && dy<0)){ dx=-dx; dy=-dy; }
+      segs.push({lid, i, a, b, dx, dy, group:new Set([lid])});
+    }
+  }
+  for (let m=0; m<segs.length; m++) for (let n=m+1; n<segs.length; n++){
+    const s=segs[m], t=segs[n];
+    if (s.lid===t.lid || Math.abs(s.dx*t.dy-s.dy*t.dx)>1e-3) continue;
+    if (Math.abs(s.dx*(t.a.y-s.a.y)-s.dy*(t.a.x-s.a.x))>1) continue;          // 不在一条直线上
+    const pr = q => (q.x-s.a.x)*s.dx+(q.y-s.a.y)*s.dy;
+    const ov = Math.min(Math.max(pr(s.a),pr(s.b)), Math.max(pr(t.a),pr(t.b))) - Math.max(Math.min(pr(s.a),pr(s.b)), Math.min(pr(t.a),pr(t.b)));
+    if (ov>2){ s.group.add(t.lid); t.group.add(s.lid); }
+  }
+  const out = {};
+  for (const lid of lids){
+    const p = px(lid), segAt = new Map(segs.filter(s=>s.lid===lid).map(s=>[s.i, s]));
+    const off = s => { if (!s) return null;
+      const g=[...s.group].sort((u,v)=>lids.indexOf(u)-lids.indexOf(v)), o=(g.indexOf(lid)-(g.length-1)/2)*LINE_W;
+      return {x:-s.dy*o, y:s.dx*o, s}; };
+    const res = [];
+    for (let i=0; i<p.length; i++){
+      const A=off(segAt.get(i)), B=off(segAt.get(i+1)), q=p[i];
+      if (!A || !B || (Math.abs(A.x-B.x)<1e-6 && Math.abs(A.y-B.y)<1e-6)){ const o=A||B||{x:0,y:0}; res.push({x:q.x+o.x, y:q.y+o.y, name:q.name}); continue; }
+      const det = -A.s.dx*B.s.dy + A.s.dy*B.s.dx;
+      if (Math.abs(det)<1e-6){ res.push({x:q.x+A.x, y:q.y+A.y, name:q.name}, {x:q.x+B.x, y:q.y+B.y}); continue; }
+      const wx=B.x-A.x, wy=B.y-A.y, t=(wx*-B.s.dy - wy*-B.s.dx)/det;
+      res.push({x:q.x+A.x+t*A.s.dx, y:q.y+A.y+t*A.s.dy, name:q.name});
+    }
+    out[lid] = res;
+  }
+  for (const s of segs) SEGS.push(s);
+  return out;
+}
+/* 换乘图标：白底圆角方块 + 两个绕圈的小箭头（官方图的换乘站符号） */
+const hubIcon = (x, y) => `<g transform="translate(${x.toFixed(1)} ${y.toFixed(1)})">
+  <rect x="-9" y="-9" width="18" height="18" rx="5" fill="#FFFFFF" stroke="#2B2F36" stroke-width="2"/>
+  <path d="M-4.6 -1.2 A4.8 4.8 0 0 1 3.6 -3.2 M4.6 1.2 A4.8 4.8 0 0 1 -3.6 3.2" fill="none" stroke="#2B2F36" stroke-width="1.6"/>
+  <path d="M2 -5.6 L4.6 -3 L1.4 -1.9 Z M-2 5.6 L-4.6 3 L-1.4 1.9 Z" fill="#2B2F36"/></g>`;
+const BADGES = [];                   // 线路首末站的「N号线」色块（px 盒子），站名避让用
+/* 站名候选位置：官方线路图会把站名摆在站点的 8 个方向之一，哪边空往哪边放。
+   resolveLabels() 从上往下试，第一个不压线、不压站、不撞别的站名的就用。 */
+function labelCandidates(st, far){
+  const o = (st.lines.length>1 ? 11 : 7) * (far ? 1.9 : 1) + 3;
+  const arr = LINES[st.lines[0]].stations;
+  const i = arr.findIndex(s=>s[0]===st.name);
+  const a = arr[i-1]||arr[i+1], b = arr[i+1]||arr[i-1];
+  const horiz = Math.abs(b[1]-a[1]) > Math.abs(b[2]-a[2]);
+  const up={dx:0,dy:-o,anchor:'middle',base:'auto'}, down={dx:0,dy:o+10,anchor:'middle'},
+        right={dx:o,dy:4,anchor:'start'}, left={dx:-o,dy:4,anchor:'end'},
+        ur={dx:o*.75,dy:-o*.75,anchor:'start'}, ul={dx:-o*.75,dy:-o*.75,anchor:'end'},
+        dr={dx:o*.75,dy:o*.75+9,anchor:'start'}, dl={dx:-o*.75,dy:o*.75+9,anchor:'end'};
+  return horiz ? [up, down, ur, dr, ul, dl, right, left] : [right, left, ur, ul, dr, dl, up, down];
+}
+function labelPos(st){ return labelCandidates(st)[0]; }
+function renderMap(){
+  if (!DRAW) DRAW = buildDraw();
+  BADGES.length = 0;
+  const p=[];
+  p.push(bgSvg());
+  p.push(`<g id="trail"></g>`);
+  for (const [lid,L] of Object.entries(LINES)){
+    p.push(`<g data-line="${lid}">`);
+    p.push(`<path d="${schematicPath(DRAW[lid], 16)}" fill="none" stroke="${L.color}" stroke-width="${LINE_W}" stroke-linecap="round" stroke-linejoin="round"/>`);
+    for (const q of DRAW[lid]){
+      if (!q.name || stationMap.get(q.name).lines.length>1) continue;
+      const end = TERMINI.has(q.name);
+      p.push(`<circle cx="${q.x.toFixed(1)}" cy="${q.y.toFixed(1)}" r="${end?5.5:4.3}" fill="#FFFFFF" stroke="#2B2F36" stroke-width="${end?3:1.6}"/>`);
+    }
+    // 首末站外侧放「N号线」色块；放不下（会压到别的线、站或色块）就不放，免得市中心更挤
+    const R = DRAW[lid], short = L.name.replace(/（.*）/, '');
+    for (const [e, f] of [[R[0], R[1]], [R[R.length-1], R[R.length-2]]]){
+      const L2=Math.hypot(e.x-f.x, e.y-f.y)||1, w=short.length*11+10;
+      let cx, cy, ok=false;
+      for (const k of [1, 1.8]){
+        cx=e.x+(e.x-f.x)/L2*(w/2+16)*k; cy=e.y+(e.y-f.y)/L2*20*k;
+        const box={left:cx-w/2, right:cx+w/2, top:cy-10, bottom:cy+10};
+        ok = !BADGES.some(b=>b.left<box.right && b.right>box.left && b.top<box.bottom && b.bottom>box.top)
+          && !SEGS.some(s=>boxHitsSeg(box, s, 1))
+          && ![...stationMap.values()].some(st=>{ const x=st.x*S, y=st.y*S; return x+7>box.left && x-7<box.right && y+7>box.top && y-7<box.bottom; });
+        if (ok) break;
+      }
+      if (!ok) continue;
+      BADGES.push({left:cx-w/2, right:cx+w/2, top:cy-10, bottom:cy+10});
+      p.push(`<g class="badge"><rect x="${(cx-w/2).toFixed(1)}" y="${(cy-10).toFixed(1)}" width="${w}" height="20" rx="5" fill="${L.color}"/>`+
+             `<text x="${cx.toFixed(1)}" y="${(cy+4.5).toFixed(1)}" text-anchor="middle" font-size="12.5" font-weight="800" fill="#FFFFFF">${short}</text></g>`);
+    }
+    p.push(`</g>`);
+  }
+  for (const st of stationMap.values()) if (st.lines.length>1) p.push(hubIcon(st.x*S, st.y*S));
+  for (const st of stationMap.values()){
+    const lp = labelPos(st);
+    p.push(`<text class="lbl ${st.lines.length>1?'hub':''}" data-name="${st.name}" x="${st.x*S+lp.dx}" y="${st.y*S+lp.dy}" text-anchor="${lp.anchor}">${st.name}</text>`);
+  }
+  p.push(`<g id="rings"></g><g id="me"></g><g id="train"></g><g id="fx"></g>`);
+  for (const st of stationMap.values()){
+    // hitR 由"到最近邻站距离的一半"算出 → 任意两站的热区都不会重叠，点谁中谁
+    p.push(`<circle class="hit" data-name="${st.name}" cx="${st.x*S}" cy="${st.y*S}" r="${st.hitR}" fill="transparent"/>`);
+  }
+  const svg = document.getElementById('map');
+  svg.setAttribute('viewBox', `${MAPX} ${MAPY} ${MAPW} ${MAPH}`);
+  svg.innerHTML = p.join('');
+  resolveLabels();
+
+  document.getElementById('legend').innerHTML = Object.entries(LINES)
+    .map(([lid,L])=>`<span class="lg" data-line="${lid}" title="只看${L.name}"><i style="background:${L.color}"></i>${L.name}</span>`).join('')
+    + `<span class="lg" data-line="ALL" title="显示全部线路"><i style="background:#EEF2FA"></i>全部</span>`;
+  applyLineFilter();
+}
+
+/* 站名防重叠：绕着站点试 8 个方向（再试远一圈），不压线、不压站点、不撞别的站名；
+   实在放不下才隐藏（换乘站/终点站优先），隐藏的仍可通过搜索 / 点到站点时显示出来 */
+function labelBox(name, lp, cx, cy){
+  const w=[...name].length*12.5+4, h=14;
+  const x=cx+lp.dx, y=cy+lp.dy;
+  const left = lp.anchor==='middle' ? x-w/2 : (lp.anchor==='end' ? x-w : x);
+  return {left, right:left+w, top:y-h+2, bottom:y+3};
+}
+function boxHitsSeg(b, s, pad){         // 线段是否穿过（外扩 pad 的）站名盒子：Liang–Barsky 裁剪
+  const x0=b.left-pad, x1=b.right+pad, y0=b.top-pad, y1=b.bottom+pad;
+  const dx=s.b.x-s.a.x, dy=s.b.y-s.a.y; let t0=0, t1=1;
+  for (const [pp, qq] of [[-dx, s.a.x-x0], [dx, x1-s.a.x], [-dy, s.a.y-y0], [dy, y1-s.a.y]]){
+    if (pp===0){ if (qq<0) return false; continue; }
+    const r=qq/pp;
+    if (pp<0){ if (r>t1) return false; if (r>t0) t0=r; } else { if (r<t0) return false; if (r<t1) t1=r; }
+  }
+  return true;
+}
+function resolveLabels(){
+  const els=[...document.querySelectorAll('#map .lbl')];
+  els.forEach(el=>el.classList.remove('hide'));
+  const items=els.map(el=>{
+    const name=el.dataset.name, st=stationMap.get(name);
+    return { el, st, name, pri:(st?st.lines.length:0)*10 + (TERMINI.has(name)?5:0) };
+  });
+  items.sort((a,b)=> (b.pri-a.pri) || (a.st.x-b.st.x) || (a.st.y-b.st.y));
+  const placed=[...BADGES];
+  const dots=[...stationMap.values()].map(st=>({st, r:st.lines.length>1?10:5.5}));
+  const overlaps=(a,b)=> a.left<b.right && a.right>b.left && a.top<b.bottom && a.bottom>b.top;
+  for (const it of items){
+    const cx=it.st.x*S, cy=it.st.y*S;
+    let put=null;
+    // 先找不压线的位置；实在没有，才允许压线（站名有白色描边，压线也看得清），但绝不压站点和别的站名
+    for (const [far, strict] of [[false, true], [true, true], [false, false], [true, false]]){
+      for (const lp of labelCandidates(it.st, far)){
+        const box=labelBox(it.name, lp, cx, cy);
+        if (placed.some(p=>overlaps(box,p))) continue;
+        if (dots.some(d=>{ const x=d.st.x*S, y=d.st.y*S; return x+d.r>box.left && x-d.r<box.right && y+d.r>box.top && y-d.r<box.bottom; })) continue;
+        if (strict && SEGS.some(s=>boxHitsSeg(box, s, 2))) continue;
+        put={lp, box}; break;
+      }
+      if (put) break;
+    }
+    if (!put){ it.el.classList.add('hide'); continue; }
+    it.el.setAttribute('x', cx+put.lp.dx);
+    it.el.setAttribute('y', cy+put.lp.dy);
+    it.el.setAttribute('text-anchor', put.lp.anchor);
+    placed.push(put.box);
+  }
+}
+
+/* 线路筛选：点图例只看一条线 */
+let lineFilter = 'ALL';
+function applyLineFilter(){
+  document.querySelectorAll('#map g[data-line]').forEach(g=>{
+    g.style.opacity = (lineFilter==='ALL' || g.dataset.line===lineFilter) ? '1' : '0.12';
+  });
+  document.querySelectorAll('#legend .lg').forEach(el=>{
+    el.classList.toggle('on', el.dataset.line===lineFilter);
+  });
+}
+
+/* 足迹沿着线路图上真实的走线画（含拐点），而不是两站之间直接连线 */
+function edgePts(a, b){
+  for (const R of Object.values(ROUTES)){
+    const ia=R.findIndex(q=>q.name===a), ib=R.findIndex(q=>q.name===b);
+    if (ia<0 || ib<0 || Math.abs(ia-ib)<1) continue;
+    const seg=R.slice(Math.min(ia,ib), Math.max(ia,ib)+1);
+    if (seg.filter(q=>q.name).length===2) return ia<ib ? seg : seg.reverse();
+  }
+  return [stationMap.get(a), stationMap.get(b)];
+}
+function updateMap(){
+  const rings=document.getElementById('rings'), me=document.getElementById('me'), trail=document.getElementById('trail');
+  let r='',m='',t='';
+  const tpts=[];
+  state.path.forEach((n,k)=>{ const seg = k ? edgePts(state.path[k-1], n) : [stationMap.get(n)];
+    for (const q of (k ? seg.slice(1) : seg)) tpts.push({x:q.x*S, y:q.y*S}); });
+  t=`<path d="${schematicPath(tpts, 18)}" fill="none" stroke="#F59E0B" stroke-opacity="0.45" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>`;
+  trail.innerHTML=t;
+
+  if (state.phase==='play'){
+    const nx=nextStation();
+    if (nx) r+=`<circle cx="${nx.x*S}" cy="${nx.y*S}" r="19" fill="none" stroke="#0B6BCB" stroke-opacity=".75" stroke-width="3.5" stroke-dasharray="7 7"><animate attributeName="r" values="17;24;17" dur="1.7s" repeatCount="indefinite"/></circle>`;
+  }
+  if (state.dest){
+    const d=stationMap.get(state.dest);
+    r+=`<text x="${d.x*S}" y="${d.y*S-26}" text-anchor="middle" font-size="32">🎯</text>`;
+  }
+  if (state.cur){
+    const c=stationMap.get(state.cur);
+    m+=`<circle cx="${c.x*S}" cy="${c.y*S}" r="21" fill="${LINES[state.line].color}" fill-opacity=".3"><animate attributeName="r" values="17;29;17" dur="1.7s" repeatCount="indefinite"/></circle>`;
+    m+=`<circle cx="${c.x*S}" cy="${c.y*S}" r="15" fill="#FFFFFF" stroke="${LINES[state.line].color}" stroke-width="5"/>`;
+    m+=`<text x="${c.x*S}" y="${c.y*S-28}" text-anchor="middle" font-size="32">🚇</text>`;
+  }
+  rings.innerHTML=r; me.innerHTML=m;
+  document.querySelectorAll('.lbl').forEach(el=>{
+    el.classList.toggle('cur', el.dataset.name===state.cur);
+    el.classList.toggle('dest', el.dataset.name===state.dest);
+  });
+}
+
+/* ============================ 行程逻辑 ============================ */
+function chooseDir(cur,lid,dest){
+  const arr=lineArr(lid); const i=arr.indexOf(cur); const opts=[];
+  if (i>0) opts.push(-1);
+  if (i<arr.length-1) opts.push(1);
+  if (opts.length===1) return opts[0];
+  const cost=d=>{ const e=stationMap.get(d===1?arr[arr.length-1]:arr[0]); const t=stationMap.get(dest); return (e.x-t.x)**2+(e.y-t.y)**2; };
+  return opts.sort((a,b)=>cost(a)-cost(b))[0];
+}
+function nextStation(){
+  if (state.phase!=='play') return null;
+  const arr=lineArr(state.line); let i=arr.indexOf(state.cur)+state.dir;
+  if (i<0||i>=arr.length) i=arr.indexOf(state.cur)-state.dir;
+  return stationMap.get(arr[i]);
+}
+function startAt(name){
+  const st=stationMap.get(name);
+  const lid = st.lines.slice().sort((a,b)=>lineArr(b).length-lineArr(a).length)[0];
+  const dist=bfs(name);
+  // 站点变多后，目的地控制在 8~20 站之间，太近没得玩、太远容易半路没电
+  const good=[...dist.entries()].filter(([n,d])=>d>=8&&d<=20);
+  const pool = good.length ? good : [...dist.entries()].filter(([n,d])=>d>=5);
+  const far=[...dist.entries()].sort((a,b)=>b[1]-a[1]);
+  const dest = pool.length ? pool[Math.floor(Math.random()*pool.length)][0]
+             : (far[0]?far[0][0]:[...stationMap.keys()].find(n=>n!==name));
+  state.phase='play'; state.cur=name; state.line=lid; state.dest=dest;
+  state.dir=chooseDir(name,lid,dest);
+  state.path=[name]; state.prev=null; state.chain=[]; state.energy=5;
+  state.allowNew=false; state.atHub=false; state.turns=0;
+  state.startTopic=null; state.askTopic=true;   // 先让孩子用语音说一个想聊的话题
+  state.log=[]; state.convo=[]; state.lastReply=null; state.goodStreak=0; state.startedAt=Date.now(); lastReport=null;
+  resetScoreCard();
+  document.getElementById('input').value='';
+  verdict('','');
+  syncUI(); updateMap();
+  beep(660,.09); beep(880,.12,90);
+  toast(`目标 🎯 ${dest}！先说一个你想聊的话题吧`);
+  const ask = '你想聊什么话题呀？按住说话告诉我吧！';
+  state.lastReply = ask;
+  state.convo.push({role:'youyou', text:ask}); renderChat();   // 佑佑的第一条微信消息：问孩子想聊什么
+  speak(ask, true);   // 接着站点播报之后念出来(append，不抢断站名)
+}
+/* 孩子说出想聊的话题：能对上词库就用词库话题，对不上就用孩子自己说的词当话题 */
+function pickTopic(text){
+  const hit = matchTopics(text)[0];
+  let t = hit && TOPICS.find(x=>x.id===hit.id);
+  if (!t){
+    const name = text.replace(/^(我想|我要|我们|想|要)?(聊聊|聊|说说|说|讲讲|讲)?/,'').replace(/(吧|呀|啊|哦|吗|呢|的话题|话题)?[。！？!?，,\s]*$/,'').slice(0,8) || text.slice(0,8);
+    t = {id:'custom', name, emoji:'💬', words:[name]};
+  }
+  state.askTopic=false; state.startTopic=t;
+  state.convo.push({role:'kid', text});
+  const tq = topicQuestion(t);
+  state.lastReply = tq;   // 记住话题提问，后续 judge 可用此判断小朋友是否在回答问题
+  state.convo.push({role:'youyou', text:tq});
+  syncUI();
+  speak(tq, false);
+}
+function advance(){
+  const arr=lineArr(state.line);
+  let i=arr.indexOf(state.cur)+state.dir;
+  if (i<0||i>=arr.length){ state.dir=-state.dir; i=arr.indexOf(state.cur)+state.dir; toast('🚧 到终点站啦，列车掉头继续！'); }
+  state.cur=arr[i]; state.path.push(state.cur);
+  state.allowNew=false;
+  state.atHub = stationMap.get(state.cur).lines.length>1;
+}
+/* 换乘站弹窗：继续坐当前线 = 接着聊；换乘别的线 = 换一个新话题（每条线一个不同话题），再选方向 */
+const lineBadge = (lid, size) => {
+  const c=LINES[lid].color, n=parseInt(c.slice(1),16);
+  const light = ((n>>16)*299 + ((n>>8)&255)*587 + (n&255)*114)/1000 > 170;   // 浅色线路用深色字
+  return `<span class="badge ${size||''} ${light?'light':''}" style="background:${c}">${lid.slice(1)}</span>`;
+};
+function offerTransfer(){
+  const others = stationMap.get(state.cur).lines.filter(l=>l!==state.line);
+  if (!others.length) return Promise.resolve(false);
+  const curName = state.prev ? state.prev.topicName : '', curEmoji = state.prev ? state.prev.topicEmoji : '💬';
+  const pool = TOPICS.filter(t=>t.name!==curName).sort(()=>Math.random()-.5);
+  const options = others.map((lid,k)=>({ lid, topic:pool[k%pool.length] }));
+  $('taTitle').textContent = `${state.cur}可以换乘`;
+  const box = $('taOptions');
+  return new Promise(resolve=>{
+    const showLines = () => {
+      box.innerHTML = '';
+      const stay = document.createElement('button');
+      stay.className = 'ta-opt stay';
+      stay.innerHTML = `${lineBadge(state.line,'md')}<span>继续坐${LINES[state.line].name}<small>接着聊 ${curEmoji}「${esc(curName)}」</small></span>`;
+      stay.onclick = () => resolve(null);
+      box.append(stay);
+      for (const o of options){
+        const b = document.createElement('button');
+        b.className = 'ta-opt';
+        b.innerHTML = `${lineBadge(o.lid,'md')}<span>换乘${LINES[o.lid].name}<small>换个话题：${o.topic.emoji}「${esc(o.topic.name)}」</small></span>`;
+        b.onclick = () => showDirs(o);
+        box.append(b);
+      }
+    };
+    const showDirs = o => {
+      const arr = lineArr(o.lid), i = arr.indexOf(state.cur);
+      box.innerHTML = `<p class="ta-q">换乘 ${lineBadge(o.lid)} ${LINES[o.lid].name}，往哪边开？</p>`;
+      const dirs = document.createElement('div');
+      dirs.className = 'dir-buttons';
+      for (const [dir,end] of [[-1,i>0&&arr[0]],[1,i<arr.length-1&&arr[arr.length-1]]]){
+        if (!end) continue;
+        const b = document.createElement('button');
+        b.className = 'big-btn';
+        b.textContent = `开往 ${end} 方向 ▶`;
+        b.onclick = () => resolve({ ...o, dir, end });
+        dirs.append(b);
+      }
+      const back = document.createElement('button');
+      back.className = 'big-btn grey';
+      back.textContent = '‹ 返回';
+      back.onclick = showLines;
+      box.append(dirs, back);
+    };
+    showLines();
+    $('transferAsk').hidden = false;
+  }).then(pick=>{
+    $('transferAsk').hidden = true;
+    if (!pick) return false;
+    const t = pick.topic;
+    state.line = pick.lid; state.dir = pick.dir;
+    state.startTopic = t; state.allowNew = false;
+    const q = topicQuestion(t);
+    state.lastReply = q; state.convo.push({role:'youyou', text:q});
+    syncUI(); updateMap();
+    verdict('ok', `🔁 <b>换乘${LINES[pick.lid].name}，开往 ${esc(pick.end)} 方向</b><br>新话题是「${t.emoji} ${t.name}」，例如：${topicExamples(t)}…`);
+    speak(q, false);              // 语音只念新话题的提问，接上对话
+    return true;
+  });
+}
+
+/* ---- 提问检测：佑佑上一句话是不是在提问？ ---- */
+/* 当小朋友接着 AI 的提问往下说时，答案里的词可能属于别的主题
+   （比如话题是运动→骑车，AI 问「你喜欢骑车去哪里？」，小朋友答「去高铁站」，
+   「高铁」属于交通工具，不属于运动），但这其实是在接着对话往下说，该算过关。 */
+const QUESTION_PATTERNS = [
+  /去哪|去哪里|哪儿|到哪里|什么地方/,          // 地点提问
+  /什么|什么样|怎么样的|几/,                    // 事物/数量提问
+  /为什么|怎么|怎样/,                            // 原因/方式提问
+  /谁|哪个人/,                                   // 人物提问
+  /喜欢.{0,4}吗|有没有|是不是|好不好|对不对/,    // 是非提问
+  /长什么|什么颜色|什么样子|多大|多高|多重/      // 属性提问
+];
+function aiAskedQuestion(aiText){
+  if(!aiText) return false;
+  return QUESTION_PATTERNS.some(re=>re.test(aiText));
+}
+/* 小朋友的回答里有没有实义词（任何话题的词或描述词都算） */
+function hasAnyContent(text){
+  if(matchTopics(text).length) return true;
+  for(const g of DESC_GROUPS){
+    if(g.w.some(w=>text.includes(w))) return true;
+  }
+  return false;
+}
+
+/* ============================ 判定引擎 ============================ */
+function judge(text){
+  const hits=matchTopics(text);
+  const ids=[...new Set(hits.map(h=>h.id))];
+  const top = hits[0] ? {id:hits[0].id,name:hits[0].name,emoji:hits[0].emoji} : null;
+
+  if (state.allowNew) return {ok:true, topic:top, tag:'new', reason:'🚉 换乘站特权，开启全新话题！'};
+
+  if (!state.prev){
+    const t = state.startTopic;
+    if (!t) return {ok:true, topic:top, tag:'start', reason:'出发！第一句说什么都可以 🚀'};
+    if (t.id==='custom') return {ok:true, topic:{id:t.id,name:t.name,emoji:t.emoji}, tag:'start', reason:`聊「${t.name}」，出发！`};
+    if (ids.includes(t.id))
+      return {ok:true, topic:{id:t.id,name:t.name,emoji:t.emoji}, tag:'start',
+        reason:`聊的是「${t.name}」，说对了，上车！`};
+    const rid2 = ids.find(id=>(RELATED[t.id]||[]).includes(id));
+    if (rid2){ const rt=TOPICS.find(x=>x.id===rid2);
+      return {ok:true, topic:{id:rt.id,name:rt.name,emoji:rt.emoji}, tag:'start',
+        reason:`「${t.name}」→「${rt.name}」，也算数，上车！`}; }
+    return {ok:false, tag:'start',
+      reason:`这一轮的话题是「${t.name}」${t.emoji}，要说跟它有关的才行哦。`,
+      hint:`试试：${topicExamples(t)}… 或者点右边的话题按钮帮你起个头`};
+  }
+  if (text===state.prev.text) return {ok:false, reason:'这句话刚才说过啦，换一句新的吧～'};
+  if (text.length < state.prev.text.length && state.prev.text.includes(text))
+    return {ok:false, reason:`只说「${text}」不够哦，把它说成一个完整的句子吧～`, hint:hintFor(state.prev)};
+
+  const pHits=matchTopics(state.prev.text);
+  const shared=hits.find(h=>pHits.some(p=>p.word===h.word));
+  if (shared) return {ok:true, topic:{id:shared.id,name:shared.name,emoji:shared.emoji}, tag:'word',
+    reason:`两句都提到了「${shared.word}」，接上啦！`};
+
+  if (state.prev.topicId && ids.includes(state.prev.topicId))
+    return {ok:true, topic:{id:state.prev.topicId,name:state.prev.topicName,emoji:emojiOf(state.prev.topicId)}, tag:'same',
+      reason:`还是「${state.prev.topicName}」，顺利进站！`};
+
+  if (state.prev.topicId){
+    const rel=RELATED[state.prev.topicId]||[];
+    const rid=ids.find(id=>rel.includes(id));
+    if (rid){ const t=TOPICS.find(x=>x.id===rid);
+      return {ok:true, topic:{id:t.id,name:t.name,emoji:t.emoji}, tag:'rel',
+        reason:`「${state.prev.topicName}」→「${t.name}」，联想成功！`}; }
+  }
+  const sc=sharedChars(state.prev.text,text);
+  if (sc.length>=2) return {ok:true,
+    topic: top || {id:state.prev.topicId,name:state.prev.topicName,emoji:emojiOf(state.prev.topicId)}, tag:'char',
+    reason:`有一样的字「${sc.slice(0,2).join('')}」，过关！`};
+
+  /* —— 上下文感知：小朋友在接着 AI 的提问往下说 ——
+     举例：话题=运动，AI 问「你喜欢骑车去哪里？」，小朋友答「去高铁站」。
+     「高铁」属于交通工具，不在运动词表里，上面所有检查都会 miss。
+     但小朋友明明是在回答 AI 的问题，算他过关！ */
+  if (state.lastReply && aiAskedQuestion(state.lastReply) && hasAnyContent(text)){
+    const prevTopic = state.prev.topicId
+      ? {id:state.prev.topicId, name:state.prev.topicName, emoji:emojiOf(state.prev.topicId)}
+      : (top || {id:null, name:'不限', emoji:'💬'});
+    return {ok:true, topic: prevTopic, tag:'answer',
+      reason:`接着佑佑的问题回答，说得通！`};
+  }
+
+  const why = top ? `你说的「${top.name}」和上一句的「${state.prev.topicName || '内容'}」连不上哦。`
+                  : `没找到和上一句的关联，试试接着上一个话题说。`;
+  return {ok:false, reason:why, hint:hintFor(state.prev)};
+}
+function hintFor(prev){
+  if (!prev || !prev.topicId) return '先说一个具体的东西，比如「小猫」「苹果」「消防车」';
+  const t=TOPICS.find(x=>x.id===prev.topicId);
+  const rel=(RELATED[prev.topicId]||[]).map(id=>TOPICS.find(x=>x.id===id)).filter(Boolean);
+  const pick=t.words.filter(w=>w.length>=2).slice(0,3);
+  const relPick=rel.length? rel[0].words.filter(w=>w.length>=2).slice(0,2):[];
+  return `接着「${t.name}」说：${pick.join('、')}…${relPick.length?` 或者转到「${rel[0].name}」：${relPick.join('、')}`:''}`;
+}
+
+/* ============================ 交互 ============================ */
+const $=id=>document.getElementById(id);
+function verdict(cls,html){ const v=$('verdict'); v.className='verdict '+cls; v.innerHTML=html; }
+function toast(msg){
+  $('hintbar').textContent=msg;
+  clearTimeout(toast._t); toast._t=setTimeout(()=>{ $('hintbar').textContent='继续说，往下一站开！'; },2600);
+}
+function audioCtx(){
+  const ac=beep._ac||(beep._ac=new (window.AudioContext||window.webkitAudioContext)());
+  // iOS/Safari 会在没有用户手势时把 AudioContext 挂起，不 resume 就完全没声音
+  if (ac.state==='suspended') ac.resume();
+  return ac;
+}
+function beep(freq,dur,delay,type,vol){
+  try{
+    const ac=audioCtx();
+    const t0=ac.currentTime+(delay||0)/1000;
+    const o=ac.createOscillator(), g=ac.createGain();
+    o.type=type||'sine'; o.frequency.value=freq;
+    g.gain.setValueAtTime(0.0001,t0); g.gain.exponentialRampToValueAtTime(vol||0.28,t0+0.015);
+    g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);
+    o.connect(g).connect(ac.destination); o.start(t0); o.stop(t0+dur+0.05);
+  }catch(e){}
+}
+/* ---------- 列车音效（全用合成声，不用人声，免得打断语音对话） ---------- */
+function _noise(ac){
+  if (_noise._b) return _noise._b;
+  const b=ac.createBuffer(1, ac.sampleRate, ac.sampleRate), d=b.getChannelData(0);
+  for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
+  return (_noise._b=b);
+}
+// 一段滤波噪声：type/freq 决定是"咔哒"还是"嘶——"
+function _noiseHit(ac, t0, dur, type, freq, vol){
+  const s=ac.createBufferSource(), f=ac.createBiquadFilter(), g=ac.createGain();
+  s.buffer=_noise(ac); f.type=type; f.frequency.value=freq;
+  g.gain.setValueAtTime(vol,t0); g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);
+  s.connect(f).connect(g).connect(ac.destination); s.start(t0); s.stop(t0+dur+0.05);
+}
+function trainHorn(){            // 出发鸣笛：两个低沉的和声
+  try{
+    const ac=audioCtx(), t0=ac.currentTime, f=ac.createBiquadFilter(), g=ac.createGain();
+    f.type='lowpass'; f.frequency.value=1400;
+    g.gain.setValueAtTime(0.0001,t0); g.gain.exponentialRampToValueAtTime(0.16,t0+0.05);
+    g.gain.setValueAtTime(0.16,t0+0.45); g.gain.exponentialRampToValueAtTime(0.0001,t0+0.7);
+    f.connect(g).connect(ac.destination);
+    [311,370].forEach(fr=>{ const o=ac.createOscillator(); o.type='sawtooth'; o.frequency.value=fr; o.connect(f); o.start(t0); o.stop(t0+0.75); });
+  }catch(e){}
+}
+function trainClack(){           // 车轮压过钢轨接缝：咔哒-咔哒
+  try{ const ac=audioCtx(), t0=ac.currentTime;
+    _noiseHit(ac, t0, 0.06, 'bandpass', 900, 0.5);
+    _noiseHit(ac, t0+0.1, 0.06, 'bandpass', 750, 0.4);
+  }catch(e){}
+}
+function successSfx(){           // 过关音效：叮-叮-叮-叮↑ 上行琶音 + 一串闪亮的高音
+  [523,659,784,1047].forEach((f,i)=>beep(f,.22,i*85,'triangle',.26));
+  [1568,2093,2637,3136].forEach((f,i)=>beep(f,.16,380+i*55,'sine',.09));
+}
+function firePop(){              // 烟花：砰 + 噼里啪啦
+  try{ const ac=audioCtx(), t0=ac.currentTime;
+    _noiseHit(ac, t0, 0.3, 'lowpass', 900, 0.45);
+    for(let i=0;i<7;i++) _noiseHit(ac, t0+0.12+Math.random()*0.45, 0.03, 'highpass', 4000, 0.18);
+  }catch(e){}
+}
+function trainBrake(){           // 进站刹车：嘶——
+  try{ const ac=audioCtx(); _noiseHit(ac, ac.currentTime, 0.7, 'highpass', 3000, 0.12); }catch(e){}
+}
+/* ---------- 语音播报（TTS） ---------- */
+let _voices=[];
+function _loadVoices(){ try{ _voices=window.speechSynthesis.getVoices(); }catch(e){} }
+if ('speechSynthesis' in window){
+  _loadVoices();
+  window.speechSynthesis.onvoiceschanged=_loadVoices;
+}
+// 挑一个温柔小姐姐的普通话女声：优先点名好听的温柔女声，再考虑现代自然音，坚决避开粤语
+function _pickVoice(){
+  if(!_voices.length){ try{ _loadVoices(); }catch(e){} }
+  const vs=_voices;
+  const lang=v=>(v.lang||'').toLowerCase();
+  const key =v=>(v.name||'').toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]/g,'');
+  const isZh=v=>/zh|cmn/i.test(lang(v));
+  const isCantonese=v=>/yue|zh[-_]hk/i.test(lang(v));        // 粤语/香港口音 → 念普通话会"像外国人"
+  const isMainland=v=>/zh[-_]cn|cmn|hans/i.test(lang(v));    // 大陆普通话(简体)
+  const uri =v=>(v.voiceURI||'').toLowerCase();
+  const isMale=v=>/(limu|yunxi|yunjian|yunyang|yunfeng|yunhao|yunze|kangkang|男)/.test(key(v));
+  // 0) 最像真人：iPad / Mac 上下载的「高音质(Premium) / 优化(Enhanced)」女声，Edge 的 Natural 神经网络女声；
+  //    同等条件下优先大陆普通话（避开台湾腔、粤语）
+  const hq=v=>/premium|enhanced|natural|neural|高音质|优化/.test(key(v)+' '+uri(v));
+  const best=vs.filter(v=>isZh(v)&&!isCantonese(v)&&!isMale(v)&&hq(v))
+               .sort((a,b)=>(isMainland(b)-isMainland(a)) || (/premium|高音质/.test(key(b)+uri(b)) - /premium|高音质/.test(key(a)+uri(a))))[0];
+  if(best) return best;
+  // 1) 点名温柔小姐姐女声：Mei-Jia(台湾温柔女声)、xiaoxiao/xiaoyi/lili/huihui 等；避开老旧机械的 Ting-Ting
+  const fav=['meijia','xiaoxiao','xiaoyi','lili','huihui','yuxi','xiaoqiao','yuansheng','tingtang'];
+  for(const k of fav){
+    const v=vs.find(v=>isZh(v)&&!isCantonese(v)&&key(v).includes(k));
+    if(v) return v;
+  }
+  // 2) 现代自然/神经网络女声(Google 普通话、premium、enhanced、natural、Siri)
+  const neural=vs.find(v=>isZh(v)&&!isCantonese(v)&&/(google|普通话|premium|enhanced|natural|siri)/i.test(v.name||''));
+  if(neural) return neural;
+  // 3) 大陆普通话(zh-CN / cmn / hans)
+  const cn=vs.find(v=>isMainland(v)&&!isCantonese(v));
+  if(cn) return cn;
+  // 4) 任意中文(排除粤语)
+  const zh=vs.find(v=>isZh(v)&&!isCantonese(v));
+  if(zh) return zh;
+  // 5) 兜底：任意 zh
+  return vs.find(isZh)||null;
+}
+// 念之前清理文字：表情符号会被读成「派对礼花」之类的怪词，～ 和重复的感叹号也会让语调变怪
+const speakable = t => String(t)
+  .replace(/[\p{Extended_Pictographic}\u{FE0F}\u{200D}\u{1F3FB}-\u{1F3FF}]/gu, '')
+  .replace(/[～~]+/g, '，').replace(/([！!？?。，,])\1+/g, '$1').replace(/\s+/g, ' ').trim();
+function speak(text, append, opts){
+  try{
+    if (!('speechSynthesis' in window)) return;
+    const ss=window.speechSynthesis;
+    if (!append) ss.cancel();          // append 时不清掉，接着上一句继续读
+    const u=new SpeechSynthesisUtterance(speakable(text));
+    u.lang='zh-CN';
+    // 用接近正常说话的语速和原声音调：把音调调高会让系统语音一下子变得很"机器人"
+    u.rate  = (opts&&opts.rate !=null)? opts.rate  : 0.96;
+    u.pitch = (opts&&opts.pitch!=null)? opts.pitch : 1.0;
+    const zh=_pickVoice();
+    if (zh) u.voice=zh;
+    ss.speak(u);
+  }catch(e){}
+}
+function speakStation(name){
+  const st=stationMap.get(name); if(!st) return;
+  const lines=st.lines.map(l=>LINES[l].name).join('、');
+  speak(st.lines.length>1 ? `${name}站，换乘${lines}` : `${name}站，${lines}`);
+}
+function praisePhrase(topic, score){
+  const stars = score>=90?3 : score>=85?2 : score>=80?1 : 0;
+  const lead = '你真棒，说的太好了！';               // 夸奖固定第一句
+  let extra;
+  if (score>=92){                                   // 夸张表扬：说得超级好
+    const exag=[
+      `「${topic}」你说得也太厉害了吧！！🎉🎉 佑佑简直是语言表达小天才！`,
+      `「${topic}」说得超级超级棒！！🌟🌟 妈妈都要给你站起来鼓掌啦！`,
+      `「${topic}」你说得又清楚又好玩，简直是满分小主播！！🎤✨`,
+      `关于「${topic}」你说得太精彩了！！👏👏 佑佑你也太牛了吧！`
+    ];
+    extra=exag[Math.floor(Math.random()*exag.length)];
+  } else if (score>=85){                            // 很棒
+    const great=[
+      `「${topic}」说得太好啦，讲得又清楚又有意思，真厉害！🌟`,
+      `哇！「${topic}」你说得真棒，听得我都想给你鼓掌啦！👏`,
+      `「${topic}」说得超级好！佑佑这回表达满分！💯`,
+      `厉害厉害！「${topic}」讲得绘声绘色，继续加油！🔥`
+    ];
+    extra=great[Math.floor(Math.random()*great.length)];
+  } else if (score>=75){                            // 不错
+    const good=[
+      `「${topic}」说得很清楚，真棒！`,
+      `「${topic}」，说得很清楚，真厉害！`,
+      `这次聊的是「${topic}」，你讲得真好！`
+    ];
+    extra=good[Math.floor(Math.random()*good.length)];
+  } else {                                         // 基础鼓励
+    const ok=[
+      `这次的话题是「${topic}」，说得不错哦！`,
+      `「${topic}」，说得挺好的，继续说！`,
+      `这次聊的是「${topic}」，你说得很认真！`
+    ];
+    extra=ok[Math.floor(Math.random()*ok.length)];
+  }
+  // 第一句固定夸奖 + 接着再加一点表扬
+  return stars>0 ? `${lead} ${extra}还点亮了${stars}颗小星星！` : `${lead} ${extra}`;
+}
+/* ---------- 点赞 / 叉叉 大特效 ---------- */
+function flashMark(id){
+  const el=$(id); if(!el) return;
+  el.classList.remove('show'); void el.offsetWidth;
+  el.classList.add('show');
+}
+function flashUp(){ flashMark('bigUp'); }
+function flashX(){ flashMark('bigX'); }
+
+/* 夸张表扬横幅：说得特别好时，全屏弹出一个又大又蹦的表扬条 */
+function showHype(text){
+  const el=document.getElementById('hype'); if(!el) return;
+  el.textContent=text;
+  el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
+  clearTimeout(showHype._t);
+  showHype._t=setTimeout(()=>el.classList.remove('show'), 2600);
+}
+
+/* 答对先打一个勾号，持续 ms 毫秒后再开地铁（.show 交给 bigmarkIn 动画自行淡出） */
+function showCheck(ms){
+  return new Promise(resolve=>{
+    const el=document.getElementById('check'); if(!el){ resolve(); return; }
+    el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
+    successSfx(); fireworks(ms);                 // 勾号 + 烟花 + 过关音效
+    setTimeout(resolve, ms);
+  });
+}
+/* 勾号周围放烟花：一朵朵在勾号四周炸开，每朵配一声"砰"+噼啪声 */
+function fireworks(ms){
+  const cv=document.createElement('canvas'), ctx=cv.getContext && cv.getContext('2d');
+  if (!ctx) return;
+  const dpr=window.devicePixelRatio||1, W=innerWidth, H=innerHeight;
+  cv.width=W*dpr; cv.height=H*dpr; cv.className='fw-canvas';
+  ctx.scale(dpr,dpr); document.body.appendChild(cv);
+  const cols=['#4ADE80','#FCD34D','#F472B6','#60A5FA','#FB923C','#C084FC','#FFFFFF'];
+  const cx=W/2, cy=H*.4, parts=[];
+  const burst=(x,y)=>{
+    const c=cols[Math.floor(Math.random()*cols.length)], c2=cols[Math.floor(Math.random()*cols.length)];
+    const n=90, sp=5.5+Math.random()*3;
+    for(let i=0;i<n;i++){
+      const a=Math.PI*2*i/n, v=sp*(.5+Math.random()*.5);
+      parts.push({x,y,vx:Math.cos(a)*v,vy:Math.sin(a)*v,life:1,decay:.011+Math.random()*.009,c:i%3?c:c2});
+    }
+    firePop();
+  };
+  const t0=performance.now(), shots=[0,260,520,820,1120,1420].filter(t=>t<ms-300);
+  let fired=0;
+  const step=now=>{
+    const t=now-t0;
+    while (fired<shots.length && t>=shots[fired]){
+      const k=fired++, side=k%2?1:-1;            // 左右交替，避开正中间的勾号
+      burst(cx+side*(W*.16+Math.random()*W*.18), cy+(Math.random()-.6)*H*.42);
+    }
+    ctx.clearRect(0,0,W,H);
+    for(let i=parts.length-1;i>=0;i--){
+      const p=parts[i];
+      p.vx*=.97; p.vy=p.vy*.97+.06; p.x+=p.vx; p.y+=p.vy; p.life-=p.decay;
+      if (p.life<=0){ parts.splice(i,1); continue; }
+      ctx.globalAlpha=p.life; ctx.fillStyle=ctx.strokeStyle=p.c;
+      ctx.lineWidth=2.5+p.life*2; ctx.lineCap='round';           // 拖一条小尾巴，像真的烟花
+      ctx.beginPath(); ctx.moveTo(p.x-p.vx*3,p.y-p.vy*3); ctx.lineTo(p.x,p.y); ctx.stroke();
+      ctx.beginPath(); ctx.arc(p.x,p.y,2.5+p.life*2.5,0,Math.PI*2); ctx.fill();
+    }
+    if (t<ms+900 && (parts.length || fired<shots.length)) requestAnimationFrame(step); else cv.remove();
+  };
+  requestAnimationFrame(step);
+}
+
+function syncUI(){
+  const st=state.cur?stationMap.get(state.cur):null;
+  $('curV').innerHTML  = st? `${st.name}<small>${LINES[state.line].name}</small>` : '—';
+  const nx=nextStation();
+  $('nextV').textContent = nx? nx.name : '—';
+
+  if (state.prev){
+    $('prevTag').textContent = `${state.prev.topicEmoji||'💬'} 上一句话题：${state.prev.topicName||'自由发挥'}`;
+    $('prevQuote').textContent = state.prev.text;
+    $('input').placeholder = '接着上一句说，有关联才能进站…';
+  } else if (state.askTopic){
+    $('prevTag').textContent = '🎤 先说一个你想聊的话题';
+    $('prevQuote').textContent = '比如：动物、恐龙、地铁、好吃的…';
+    $('input').placeholder = '说一个想聊的话题，比如「恐龙」';
+  } else if (state.startTopic){
+    const t=state.startTopic;
+    $('prevTag').textContent = `${t.emoji} 本轮话题：${t.name}`;
+    $('prevQuote').textContent = `第一句要说说「${t.name}」哦，比如：${topicExamples(t)}…`;
+    $('input').placeholder = `说说${t.name}吧，比如「${t.words[0]}」…`;
+  } else {
+    $('prevTag').textContent='🆕 还没开始，第一句说什么都可以！';
+    $('prevQuote').textContent='在地图上点一个地铁站出发吧～';
+    $('input').placeholder = '说一句话，要和上一句有关联才能进站哦…';
+  }
+
+  $('chain').innerHTML = state.chain.length
+    ? state.chain.map((c,i)=>`${i?'<span class="ar">→</span>':''}<span class="n">${c.emoji} ${c.name}</span>`).join('')
+    : '<span style="color:#5C688C;font-size:12px">还没有话题…</span>';
+
+  renderChat();
+  if (state.lastReply){
+    $('input').placeholder=`接着佑佑的话说：${state.lastReply}`;
+  }
+}
+
+function renderChat(){
+  const box=$('chat'); if(!box) return;
+  const c=state.convo||[];
+  if(!c.length){
+    box.innerHTML='<div class="wempty">点一个地铁站出发，和佑佑聊起来吧～</div>';
+    return;
+  }
+  box.innerHTML=c.map(m=>{
+    const me=m.role==='kid';
+    const av=me?'🧒':'🚇';
+    return '<div class="wmsg '+(me?'me':'them')+'">'
+      + (me?'':'<div class="wavatar">'+av+'</div>')
+      + '<div class="wbubble">'+esc(m.text)+'</div>'
+      + (me?'<div class="wavatar">'+av+'</div>':'')
+      + '</div>';
+  }).join('');
+  box.scrollTop=box.scrollHeight;
+}
+
+async function submit(){
+  stopMic();                                                // 提交时立刻停掉录音，别再一直开着
+  if (state.busy) return;                                   // 列车在开，别急
+  if (state.phase!=='play'){ toast('先在地图上点一个出发站～'); return; }
+  const text=$('input').value.trim();
+  if (state.askTopic && text){ $('input').value=''; fitInput(); pickTopic(text); return; }   // 开局：这句是孩子想聊的话题
+  if (text.length<2){ verdict('no','多说一点点呀，至少两三个字 😊'); return; }
+  $('input').value=''; fitInput();                          // 内容立刻拿去打分，输入框清空
+
+  // 当前话题：第一句是出发话题，之后延续（AI 对话模式下由 AI 把话题延续下去）
+  const topicName = state.startTopic ? state.startTopic.name
+                  : (state.prev ? state.prev.topicName : '不限');
+  const topicEmoji = state.startTopic ? state.startTopic.emoji
+                  : (state.prev ? state.prev.topicEmoji : '💬');
+
+  // —— 判定 + 打分 + 回复：AI 对话优先，出错自动退回本地规则 ——
+  let ok=false, sc=null, reply='', reason='', hint='', topic=null;
+
+  if (ampAI || (cfg.mode==='ai' && cfg.key)){
+    setBusy(true, '⏳ 佑佑在听你说…');
+    try{
+      const ai = await aiChat(text, topicName);
+      if (ai.ok){
+        ok = ai.ok;
+        const lv = levelOf(ai.score);
+        sc = { score:ai.score, level:lv.t, emoji:lv.e, comment:ai.comment, byAI:true,
+               parts:[{v:0,k:'AI 点评：'+(ai.comment||'—')}], descs:[], distinct:0, chars:[...text].length };
+        reply = ai.reply;
+        reason = '说得好！';
+      } else {
+        // AI 判「无关」时，用本地规则兜底：防止误杀「接着追问往下说」这种正常对话
+        // （例：话题=运动，AI 问「你喜欢骑车去哪里？」，孩子答「去高铁站」——本地上下文感知应判过关）
+        const res=judge(text); ok=res.ok; topic=res.topic;
+        if (ok){
+          sc=scoreUtterance(text);
+          sc.note='AI 判无关，但孩子是在接着上一句追问说，已按本地规则通过';
+        } else {
+          reason=res.reason; hint=res.hint||hintFor(state.prev);
+        }
+        reply = ok ? localReply(topicName) : '';
+      }
+    }catch(e){
+      const res=judge(text); ok=res.ok; topic=res.topic;
+      if (ok){ sc=scoreUtterance(text); sc.note='AI 没连上（'+e.message+'），先用本地规则'; }
+      else { reason=res.reason; hint=res.hint||hintFor(state.prev); }
+      reply = ok ? localReply(topicName) : '';
+    }
+  } else {
+    const res=judge(text); ok=res.ok; topic=res.topic;
+    if (ok){ sc=scoreUtterance(text); }
+    else { reason=res.reason; hint=res.hint||hintFor(state.prev); }
+    reply = ok ? localReply(topicName) : '';
+  }
+
+  if (ok){
+    // 重复内容 → 调低分数
+    if (isRepeat(text)){
+      const before=sc.score;
+      sc.score=Math.max(0, sc.score-15);
+      sc.note=(sc.note?sc.note+' ':'')+`这句和之前说的一样，从 ${before} 分减到 ${sc.score} 分`;
+    }
+
+    state.prev={ text, topicId:topic?topic.id:(state.prev?state.prev.topicId:null),
+      topicName:topic?topic.name:topicName,
+      topicEmoji:topic?topic.emoji:topicEmoji };
+    if (topic && (!state.chain.length || state.chain[state.chain.length-1].id!==topic.id))
+      state.chain.push(topic);
+    state.turns++;
+    if (state.startTopic) state.startTopic=null;   // 出发话题只约束第一句
+    const before=state.cur;
+
+    // 连续说得好 → 回一点能量
+    if (sc.score>=85){
+      state.goodStreak++;
+      if (state.goodStreak%3===0 && state.energy<5){
+        state.energy++;
+        toast(`🌟 连续 ${state.goodStreak} 句说得很好，回血 +1 ❤️`);
+      }
+    } else state.goodStreak=0;
+
+    const entry={ n:state.log.length+1, text, topic:topicName, score:sc.score, level:sc.level,
+                  emoji:sc.emoji, comment:sc.comment||'', byAI:!!sc.byAI, from:before, to:null };
+    state.log.push(entry);
+    state.convo.push({role:'kid', text});
+    if (reply){ state.convo.push({role:'youyou', text:reply}); state.lastReply=reply; }
+    renderScore(sc);
+
+    advance();
+    entry.to=state.cur;
+    const hub=stationMap.get(state.cur).lines.length>1;
+
+    verdict('ok', `<b>✅ ${reason}</b><br>🚇 ${before} → <b>${state.cur}</b>　${hub?'<span style="color:#FCD34D">（换乘站！）</span>':''}<br><span class="sc">${sc.emoji} ${sc.score} 分 · ${sc.level}</span>`);
+    if (sc.score>=80) flashUp();                          // 说得好 → 大点赞
+    const praise=praisePhrase(topicName, sc.score);       // 表扬只显示在屏幕上，不念出来，免得打断语音对话
+    window.speechSynthesis && window.speechSynthesis.cancel();   // 停掉还没念完的话，开车时只有列车声
+
+    // —— 先打勾号 2 秒，再全屏开地铁 ——
+    setBusy(true, '🚇 开动中…');
+    syncUI();
+    $('me').innerHTML='';                 // 藏住静态定位图标
+    await showCheck(2000);               // 答对先显示勾号，持续 2 秒
+    await flyTrain(before, state.cur);   // 再从 A 站开到 B 站（约 3 秒）
+    updateMap();
+    if (sc.score>=85){ showHype(praise); await new Promise(r=>setTimeout(r,1800)); }   // 说得特别好 → 弹夸张表扬条，看一会儿再继续
+
+    if (state.cur===state.dest){ setBusy(false); return win(); }
+    // 换乘站：弹窗问要不要换乘（换乘 = 换话题）；换了就由新话题提问接上对话
+    const switched = hub && await offerTransfer();
+    setBusy(false);
+    if (!switched && reply) speak(reply);                 // 语音只接着聊（读出 AI 的追问）
+  } else {
+    setBusy(false);                            // AI 模式下 judge 前设了 busy=true，答错也要解除
+    state.energy--;
+    const hintTxt = hint || hintFor(state.prev) || '多说一点点，把话说完整～';
+    verdict('no', `<b>❌ 不能进站</b><br>${reason}<br><span style="color:#8E9ABF;font-size:13px">💡 ${hintTxt}</span><br><span style="font-size:12px;opacity:.8">剩余能量 ${state.energy}</span>`);
+    flashX(); speak('说的和话题无关哦');          // 大叉叉 + 语音提醒
+    beep(180,.22);
+    syncUI();
+    if (state.energy<=0) return lose();
+  }
+}
+
+/* ---------- 打分面板 ---------- */
+function setBusy(v,label){
+  state.busy=v;
+  const b=$('sayBtn'), m=$('micBtn');
+  b.disabled=v; $('input').readOnly=v;
+  b.style.opacity = v? .55 : 1;
+  b.textContent = v ? (label||'🚇 开往下一站…') : '发送';
+  if (m){ m.disabled=v; m.textContent = v ? (label||'🚇 开往下一站…') : '按住 说话'; }
+}
+function resetScoreCard(){
+  $('scNum').textContent='—'; $('scNum').classList.remove('on');
+  $('scLv').textContent='还没开始说话';
+  $('scStars').innerHTML='<span class="hollow">☆☆☆</span>';
+  $('scBar').style.width='0%';
+  $('scAvg').textContent='本局平均 —';
+  $('scTip').innerHTML='按 <b>4 岁半孩子</b> 的水平打分：只重复同一个词 ≈ 60 分；说清「事物 + 数量/部位」≈ 80 分；再加颜色、动作、在哪儿、感受，越具体分越高。';
+}
+function renderScore(sc){
+  $('scNum').textContent=sc.score;
+  $('scNum').classList.add('on');
+  $('scLv').textContent=`${sc.emoji} ${sc.level}`;
+  $('scBar').style.width=sc.score+'%';
+  // 五角星奖励：80 分以上点亮星星（80=1 颗，85=2 颗，90=3 颗）
+  const stars = sc.score>=90?3 : sc.score>=85?2 : sc.score>=80?1 : 0;
+  if (stars>0){
+    $('scStars').innerHTML = [0,1,2].map(i=>
+      i<stars ? '<span class="s pop">★</span>' : '<span class="s hollow">☆</span>'
+    ).join('');
+  } else {
+    $('scStars').innerHTML = '<span class="hollow">☆☆☆</span><span class="hint">说满 80 分就能点亮小星星哦～</span>';
+  }
+  const arr=state.log.map(l=>l.score);
+  const avg=Math.round(arr.reduce((a,b)=>a+b,0)/arr.length);
+  $('scAvg').textContent=`本局平均 ${avg} 分 · 已说 ${state.log.length} 句`;
+  let why='';
+  if (sc.note) why = '⚠️ '+sc.note;
+  else if (sc.byAI) why = sc.comment ? 'AI 点评：'+sc.comment : '';
+  else why = sc.parts.filter(p=>p.v).map(p=>`${p.v>0?'+':''}${p.v} ${p.k}`).join('；');
+  $('scTip').textContent = why || '继续说，多加点描述就能拿更高分！';
+}
+
+/* ---------- 结算 ---------- */
+function esc(s){ return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function scoreColor(s){ return s>=90?'#FCD34D' : s>=80?'#2DD4BF' : s>=70?'#7DD3FC' : s>=60?'#FCA5A5' : '#F87171'; }
+function avgScore(){
+  if (!state.log.length) return 0;
+  return Math.round(state.log.reduce((a,l)=>a+l.score,0)/state.log.length);
+}
+function buildReport(won){
+  const t=new Date(), p=n=>String(n).padStart(2,'0');
+  const stamp=`${t.getFullYear()}-${p(t.getMonth()+1)}-${p(t.getDate())} ${p(t.getHours())}:${p(t.getMinutes())}`;
+  const fileStamp=`${t.getFullYear()}${p(t.getMonth()+1)}${p(t.getDate())}-${p(t.getHours())}${p(t.getMinutes())}`;
+  const sec = state.startedAt ? Math.max(1,Math.round((Date.now()-state.startedAt)/1000)) : 0;
+  const durText = sec>=60 ? `${Math.floor(sec/60)} 分 ${sec%60} 秒` : `${sec} 秒`;
+  const avg=avgScore();
+  const best=[...state.log].sort((a,b)=>b.score-a.score)[0]||null;
+  const rows=state.log.map(l=>`| ${l.n} | ${l.from} → ${l.to||l.from} | ${l.text.replace(/\|/g,'/')} | ${l.topic} | **${l.score}** | ${l.level}${l.comment?' · '+l.comment.replace(/\|/g,'/'):''} |`).join('\n');
+  const md =
+`# 🚇 佑佑的地铁话题大冒险 · 本局成绩单
+
+- 时间：${stamp}
+- 结果：${won?`🏆 到达目的地 ${state.dest}`:`🔋 能量用完，停在 ${state.cur}（目的地是 ${state.dest}）`}
+- 出发站：${state.path[0]||'—'}　目的地：${state.dest||'—'}
+- 走过 ${state.path.length-1} 站，说了 ${state.log.length} 句话，串起 ${state.chain.length} 个话题
+- 用时：${durText}
+- **口语平均分：${avg} 分**（按 4 岁半孩子的表达水平打分）
+${best?`- 最佳一句（${best.score} 分）：「${best.text}」`:''}
+
+## 每一句的得分
+
+| # | 车站 | 佑佑说的话 | 话题 | 得分 | 评价 |
+|---|------|-----------|------|------|------|
+${rows}
+
+## 话题链
+
+${state.chain.length? state.chain.map(c=>c.emoji+' '+c.name).join(' → ') : '（这局还没串起来）'}
+
+## 走过的路线
+
+${state.path.join(' → ') || '—'}
+
+---
+_打分标准：只重复同一个词 ≈ 60 分；说清「事物 + 数量/部位」≈ 80 分；再加颜色、动作、在哪儿、感受、像什么，越具体分越高。_
+`;
+  return {md, stamp, fileStamp, avg, best, durText};
+}
+function win(){
+  state.phase='won'; syncUI(); updateMap();
+  [660,880,1046,1318].forEach((f,i)=>beep(f,.2,i*130));
+  burst(state.dest);
+  endGame(true);
+}
+function lose(){
+  state.phase='lost'; syncUI(); updateMap();
+  beep(300,.25); beep(200,.35,160);
+  endGame(false);
+}
+function endGame(won){
+  if (!state.log.length){
+    showModal(`<div class="big">${won?'🏆':'🔋'}</div><h3>${won?`到达 ${esc(state.dest)} 啦！`:'能量用完啦'}</h3>
+      <p>这一局一句都没说通，没有成绩单哦。<br>下次试试重复上一句里的一个词，就能接上啦～</p>
+      <div class="btns"><button class="btn primary" onclick="location.reload()">再来一次</button></div>`);
+    return;
+  }
+  const r=buildReport(won); lastReport=r;
+  const rows=state.log.map(l=>`<div class="line"><span class="no">${l.n}</span>
+      <span class="tx">${esc(l.text)}<span style="color:#5C688C"> · ${esc(l.topic)} · 🔜 ${esc(l.to||l.from)}</span></span>
+      <span class="sp" style="color:${scoreColor(l.score)}">${l.score}</span></div>`).join('');
+  showModal(`<div class="big">${won?'🏆':'🔋'}</div>
+    <h3>${won?`到达 ${esc(state.dest)} 啦！`:'能量用完啦'}</h3>
+    <div class="rep">
+      <div class="big-score"><b>${r.avg}</b><span>分 · 本局口语平均（4 岁半标准）</span></div>
+      <div class="meta">说了 <b>${state.log.length}</b> 句 · 走过 <b>${state.path.length-1}</b> 站 ·
+        串起 <b>${state.chain.length}</b> 个话题 · 用时 ${r.durText}
+        ${r.best?`<br>🌟 最佳一句（${r.best.score} 分）：「${esc(r.best.text)}」`:''}</div>
+      ${rows}
+      <div class="path">🧵 话题链：${state.chain.map(c=>c.emoji+c.name).join(' → ')||'—'}</div>
+      <div class="path">🚉 路线：${esc(state.path.join(' → ')||'—')}</div>
+    </div>
+    <div class="btns">
+      <button class="btn primary" onclick="saveResult(true)">💾 ${dirHandle?`存到 ${dirHandle.name}`:'保存到 workbuddy'}</button>
+      <button class="btn" onclick="copyReport()">📋 复制全文</button>
+      <button class="btn" onclick="location.reload()">${won?'再玩一次':'再来一次'}</button>
+    </div>`);
+  setTimeout(()=>{ saveResult(false); }, 600);
+}
+function copyReport(){
+  const r=lastReport||buildReport(state.phase==='won');
+  const done=()=>toast('📋 已复制全文，粘到备忘录或文档里就行');
+  if (navigator.clipboard && navigator.clipboard.writeText)
+    navigator.clipboard.writeText(r.md).then(done, ()=>fallbackCopy(r.md,done));
+  else fallbackCopy(r.md,done);
+}
+function fallbackCopy(text,done){
+  const ta=document.createElement('textarea');
+  ta.value=text; ta.style.position='fixed'; ta.style.opacity='0';
+  document.body.appendChild(ta); ta.select();
+  try{ document.execCommand('copy'); done(); }catch(e){ toast('复制失败，请手动选中文本'); }
+  ta.remove();
+}
+function showModal(html){ $('mbox').innerHTML=html; $('modal').classList.add('on'); }
+
+/* ==================== 结果导出：写进「桌面 / workbuddy」文件夹 ==================== */
+/* 浏览器不能自己往磁盘上写文件，所以这里用 File System Access API：
+   第一次点保存时让你选一次文件夹（选桌面的 workbuddy），之后就记住了，下次直接写进去。
+   万一浏览器不支持（比如用 file:// 直接打开的 Safari / Firefox），就退回普通下载。 */
+const IDB_NAME='yy-metro-fs';
+let dirHandle=null;
+
+function idbOpen(){
+  return new Promise((res,rej)=>{
+    try{
+      const r=indexedDB.open(IDB_NAME,1);
+      r.onupgradeneeded=()=>{ r.result.createObjectStore('h'); };
+      r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error);
+    }catch(e){ rej(e); }
+  });
+}
+async function idbSet(k,v){
+  try{
+    const db=await idbOpen();
+    return await new Promise(res=>{
+      const tx=db.transaction('h','readwrite');
+      tx.objectStore('h').put(v,k);
+      tx.oncomplete=()=>res(true); tx.onerror=()=>res(false);
+    });
+  }catch(e){ return false; }
+}
+async function idbGet(k){
+  try{
+    const db=await idbOpen();
+    return await new Promise(res=>{
+      const tx=db.transaction('h','readonly');
+      const q=tx.objectStore('h').get(k);
+      q.onsuccess=()=>res(q.result||null); q.onerror=()=>res(null);
+    });
+  }catch(e){ return null; }
+}
+function updateSaveBtn(){
+  const b=$('saveBtn'); if(!b) return;
+  b.textContent = dirHandle ? `💾 存到 ${dirHandle.name}` : '💾 保存本局';
+  b.title = dirHandle ? `结果会直接写进「${dirHandle.name}」文件夹，点一下可以换一个`
+                      : '把这一局的成绩单存成 md 文件';
+}
+async function restoreDir(){
+  if (!window.showDirectoryPicker) return;
+  const h=await idbGet('dir'); if(!h) return;
+  try{
+    const p=await h.queryPermission({mode:'readwrite'});
+    if (p==='granted'){ dirHandle=h; updateSaveBtn(); }
+    else if (p==='prompt'){
+      // Chrome 会在页面重新打开后要求再确认一次，这里只能在用户点击时触发，所以只提示
+      $('saveBtn').title='之前选过文件夹，点一下确认后就能继续直接写入';
+    }
+  }catch(e){}
+}
+async function writeToDir(handle,name,text){
+  const fh=await handle.getFileHandle(name,{create:true});
+  const w=await fh.createWritable();
+  await w.write(text); await w.close();
+}
+function downloadFile(name,text){
+  try{
+    const blob=new Blob([text],{type:'text/markdown;charset=utf-8'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url; a.download=name; a.style.display='none';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),5000);
+    return true;
+  }catch(e){ return false; }
+}
+async function saveResult(interactive){
+  const r=lastReport || (state.log.length ? buildReport(state.phase==='won') : null);
+  if (!r){ toast('这一局还没说话，没有东西可以保存哦～'); return null; }
+  lastReport=r;
+  const name=`佑佑地铁冒险-${r.fileStamp}.md`;
+  const canFS = !!window.showDirectoryPicker;
+
+  // 还没选过文件夹：先说明一下再弹系统的选择框（只弹这一次，之后永久记住）
+  if (!dirHandle && canFS){
+    if (!interactive) return null;           // 自动存档不打断游戏，等玩家自己点 💾
+    const go = await new Promise(res=>{
+      showModal(`<div class="big">📁</div><h3>选一次保存位置</h3>
+        <div class="setnote" style="margin-bottom:0">
+          下一步会弹出系统的文件夹选择框，请选择 <b>桌面上的 workbuddy 文件夹</b>，然后点「允许」。<br><br>
+          选过这一次之后，以后每局结束都会 <b>自动</b> 存进去，不用再选。<br>
+          <span style="color:#FCA5A5">没看到 workbuddy？先关掉这个框，去桌面新建一个文件夹再来。</span>
+        </div>
+        <div class="btns">
+          <button class="btn primary" id="pkGo">好，去选 workbuddy</button>
+          <button class="btn" id="pkDl">直接下载到「下载」</button>
+        </div>`);
+      $('pkGo').onclick=()=>{ closeModal(); res(true); };
+      $('pkDl').onclick=()=>{ closeModal(); res(false); };
+    });
+    if (go){
+      try{
+        dirHandle=await window.showDirectoryPicker({id:'yy-workbuddy', mode:'readwrite'});
+        await idbSet('dir',dirHandle); updateSaveBtn();
+      }catch(e){ /* 用户取消 → 走下载 */ }
+    }
+  }
+
+  if (dirHandle){
+    try{
+      let p=await dirHandle.queryPermission({mode:'readwrite'});
+      if (p!=='granted') p=await dirHandle.requestPermission({mode:'readwrite'});
+      if (p!=='granted') throw new Error('no-perm');
+      await writeToDir(dirHandle,name,r.md);
+      toast(`💾 已存到「${dirHandle.name}/${name}」`);
+      return name;
+    }catch(e){
+      if (e && e.name==='AbortError') return null;
+      toast('写进文件夹失败，改成下载方式…');
+    }
+  }
+  if (downloadFile(name,r.md)) toast(`💾 已下载 ${name}（在「下载」里，拖到桌面 workbuddy 就行）`);
+  else toast('这个浏览器不支持直接存文件，点「📋 复制全文」手动保存吧');
+  return name;
+}
+
+/* 话题提示 chips */
+$('chips').innerHTML = TOPICS.map(t=>`<button class="chip" data-w="${t.words[0]}" title="${t.words.slice(0,10).join('、')}">${t.emoji} ${t.name}</button>`).join('');
+$('chips').addEventListener('click',e=>{
+  const c=e.target.closest('.chip'); if(!c) return;
+  const inp=$('input'); inp.value += c.dataset.w;
+  inp.focus(); inp.setSelectionRange(inp.value.length,inp.value.length);
+});
+
+/* 事件绑定 */
+$('sayBtn').onclick=submit;
+$('input').addEventListener('keydown',e=>{ if(e.key==='Enter' && !e.shiftKey && !e.isComposing){ e.preventDefault(); submit(); } });
+function fitInput(){ const t=$('input'); t.style.height='40px'; t.style.height=Math.min(t.scrollHeight,120)+'px'; }   // 输入框随内容长高
+$('input').addEventListener('input', fitInput);
+$('resetBtn').onclick=()=>location.reload();
+
+/* 手动保存一局 */
+$('saveBtn').onclick=()=>{ saveResult(true).catch(e=>toast('保存失败：'+(e&&e.message||e))); };
+
+/* 打分设置：本地规则 / 接真 AI */
+$('cfgBtn').onclick=()=>{
+  const on = !ampAI && cfg.mode==='ai';
+  showModal(`<div class="big">⚙️</div><h3>AI 对话设置</h3>
+    <div class="setrow">
+      <label>打分与对话方式</label>
+      <select id="cfMode">
+        <option value="local" ${on||ampAI?'':'selected'}>本地规则（离线能用，已按 4 岁半标准标定）</option>
+        <option value="ai" ${on?'selected':''}>交给 AI（打分 + 接着聊天，需填接口）</option>
+        <option value="amp" ${ampAI?'selected':''}>Amp AI（打开 Amp 托管版，登录 Amp 就能用，不用填 Key）</option>
+      </select>
+    </div>
+    <div id="cfAi" style="display:${on?'block':'none'}">
+      <div class="setrow"><label>接口地址（OpenAI 兼容）</label><input id="cfEp" value="${esc(cfg.endpoint)}" placeholder="https://api.openai.com/v1"></div>
+      <div class="setrow"><label>API Key</label><input id="cfKey" type="password" value="${esc(cfg.key)}" placeholder="sk-..."></div>
+      <div class="setrow"><label>模型</label><input id="cfModel" value="${esc(cfg.model)}" placeholder="gpt-4o-mini"></div>
+    </div>
+    <div class="setnote">
+      <b>评分标准（两种方式都一样）：</b><br>
+      · 只把同一个词翻来覆去说（「蚂蚁蚂蚁蚂蚁」）→ <b>60 分</b> 上下<br>
+      · 说清了事物 + 1~2 个具体描述（「蚂蚁六条腿」）→ <b>80 分</b> 上下<br>
+      · 再说颜色 / 大小 / 动作 / 在哪儿 / 感受 / 像什么 → 越具体越高，最高 100<br><br>
+      Key 只存在这台电脑的浏览器里，不会上传到别的地方。
+    </div>
+    <div class="btns">
+      <button class="btn" id="cfTest" style="display:${on?'':'none'}">🔌 测一下连通</button>
+      <button class="btn primary" id="cfSave">保存设置</button>
+      <button class="btn" onclick="closeModal()">取消</button>
+    </div>`);
+
+  $('cfMode').onchange=e=>{
+    const ai=e.target.value==='ai';
+    $('cfAi').style.display = ai?'block':'none';
+    $('cfTest').style.display = ai?'':'none';
+  };
+  $('cfSave').onclick=()=>{
+    if ($('cfMode').value==='amp'){                 // Amp AI：去 Amp 托管的同款游戏（那边自动用 Amp AI 聊天）
+      if (ampAI){ closeModal(); return; }
+      location.href=AMP_HOSTED_URL; return;
+    }
+    if (ampAI){ location.href=LAN_URL; return; }   // 在 Amp 托管版里选回本地/自填接口 → 回局域网版
+    cfg.mode=$('cfMode').value;
+    cfg.endpoint=($('cfEp').value||'').trim()||defaultCfg().endpoint;
+    cfg.key=($('cfKey').value||'').trim();
+    cfg.model=($('cfModel').value||'').trim()||defaultCfg().model;
+    if (cfg.mode==='ai' && !cfg.key){ toast('用 AI 得先填 API Key 哦'); return; }
+    saveCfg(); updateCfgBtn(); closeModal();
+    if (cfg.mode==='ai'){
+      // 保存后自动测连通 + 同步到服务器（让 iPad 也能用同一个 Key）
+      toast('⏳ 正在测试 AI 连通…');
+      (async()=>{
+        let synced=false;
+        try{ synced=await pushServerCfg(); }catch(e){}
+        try{
+          const r=await aiScore('蚂蚁六条腿','昆虫');
+          toast(synced
+            ? `✅ AI 已连通（试测「蚂蚁六条腿」=${r.score} 分），已同步到服务器，iPad 打开同一地址也能用这个 Key！`
+            : `✅ AI 已连通（试测「蚂蚁六条腿」=${r.score} 分），可以开聊啦！`);
+        }catch(e){
+          toast(`❌ AI 连不上：${e.message}。回「⚙️ AI 对话」检查地址 / Key / 模型`);
+        }
+      })();
+    } else {
+      toast('✅ 已切回本地规则打分');
+    }
+  };
+  $('cfTest').onclick=async()=>{
+    const b=$('cfTest'); b.disabled=true; b.textContent='⏳ 测试中…';
+    const old=cfg;
+    cfg={...cfg, mode:'ai',
+      endpoint:($('cfEp').value||'').trim()||defaultCfg().endpoint,
+      key:($('cfKey').value||'').trim(),
+      model:($('cfModel').value||'').trim()||defaultCfg().model};
+    try{ const r=await aiScore('蚂蚁六条腿','昆虫'); b.textContent=`✅ 通了：${r.score} 分`; }
+    catch(e){ b.textContent='❌ '+e.message; }
+    b.disabled=false; cfg=old;
+  };
+};
+function updateCfgBtn(){ $('cfgBtn').textContent = ampAI ? '⚙️ AI 对话 · Amp' : cfg.mode==='ai' ? '⚙️ AI 对话 · 开' : '⚙️ AI 对话'; }
+updateCfgBtn();
+restoreDir();
+
+$('helpBtn').onclick=()=>showModal(`<div class="big">🚇</div><h3>怎么玩</h3>
+  <div class="rules"><ol>
+    <li>在地图上 <b>点一个地铁站</b> 出发，系统会随机指定一个 🎯 目的地。</li>
+    <li>佑佑 <b>说一句话</b>（打字或按 🎤 说话都行），第一句随便说什么都能进站。</li>
+    <li>从第二句起，<b>必须和上一句有关联</b> 才能开到下一站：<br>
+        · 都提到同一个词（小猫 → 小猫爱吃鱼）<br>
+        · 同一个话题（苹果 → 香蕉）<br>
+        · 能联想上的话题（老虎 → 大海 → 轮船）<br>
+        · 有两个以上相同的字</li>
+    <li>接不上就 <b>停在原地</b>，并扣 1 点 ❤️ 能量（共 5 点）。</li>
+    <li>开到 <b>换乘站</b>（白色大圆圈）时，可以 <b>换线路</b>，也可以 <b>换一个全新话题</b>。</li>
+    <li>到达 🎯 目的地就赢啦！</li>
+  </ol></div>
+  <div class="setnote" style="margin-top:12px">
+    <b>口语打分：</b>每进一站都按 <b>4 岁半孩子</b> 的表达水平给这句话打分。<br>
+    · 只重复同一个词（「蚂蚁蚂蚁蚂蚁」）→ <b>60 分</b><br>
+    · 事物 + 具体描述（「蚂蚁六条腿」）→ <b>80 分</b><br>
+    · 再说颜色、大小、动作、在哪儿、感受 → 越具体越高<br>
+    连续说得很好还能回血 ❤️。<br><br>
+    <b>成绩单：</b>游戏结束会自动存一份 md 到桌面 <b>workbuddy</b> 文件夹
+    （第一次会让你选一次文件夹），也可以随时点右上角 💾 保存。
+  </div>
+  <button class="btn primary" style="margin-top:18px" onclick="closeModal()">开始玩</button>`);
+function closeModal(){ $('modal').classList.remove('on'); }
+// 点蒙层才关；但弹窗里有输入框/下拉时点外面不关（改 Key 时手滑点外面不丢内容）
+$('modal').addEventListener('click',e=>{
+  if(e.target.id==='modal' && !document.querySelector('#mbox input, #mbox select, #mbox textarea')) closeModal();
+});
+
+/* 语音输入（含多处兜底，防止「说完了结束不了」） */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+/* 关键前提：麦克风只在「安全上下文」里可用 —— https:// 或 localhost / 127.0.0.1。
+   http://192.168.x.x 这种局域网明文地址，Safari 和 Chrome 都会直接拒绝麦克风，
+   连权限弹窗都不弹。所以这里先把情况说清楚，别让人对着没反应的按钮干瞪眼。 */
+const SECURE_OK = !!window.isSecureContext;
+let stopMic=function(){};    // 全局：提交时停掉还在录音的麦克风
+
+if (!SR){
+  const w=$('secWarn'); w.style.display='block';
+  w.innerHTML = '🎤 <b>这个浏览器不支持语音识别</b>，直接打字一样能玩。<br>'
+              + 'iPad 上建议用 <b>Safari</b> 打开。';
+} else if (!SECURE_OK){
+  const w=$('secWarn'); w.style.display='block';
+  w.innerHTML = '⚠️ <b>当前不是加密连接，浏览器会禁掉麦克风</b>，🎤 用不了（打字不受影响）。<br>'
+              + '请用 <code>https://</code> 开头的地址打开本页；<br>'
+              + '或者在电脑上用 <code>http://localhost</code> / <code>http://127.0.0.1</code>。';
+}
+
+if (SR && SECURE_OK){
+  /* 像微信一样「按住 说话」：按下开始录音，气泡里实时出字；松手把转出来的文字直接发出去；
+     按住时手指上滑到 ✕ 再松手 = 取消。整个界面只有这一个按钮，小朋友不用打字。 */
+  const rec = new SR();
+  rec.lang='zh-CN'; rec.interimResults=true; rec.continuous=true; rec.maxAlternatives=1;
+  const btn=$('micBtn'), bar=$('wxBar'), layer=$('recLayer'), recText=$('recText'), recTip=$('recTip');
+  bar.classList.remove('kbd'); bar.classList.add('voice');
+  let holding=false, sending=false, cancelZone=false, listening=false, stopped=true;
+  let t0=0, watchdog=null, finalText='', interim='';
+  const heard=()=>(finalText+interim).trim();
+  const setZone=c=>{
+    cancelZone=c; layer.classList.toggle('cancel',c);
+    btn.textContent = c ? '松开 取消' : '松开 发送';
+    recTip.textContent = c ? '松开手指，取消发送' : '松开 发送，上滑 取消';
+  };
+
+  // 立刻停掉并丢弃（取消 / 提交 / 出错时都走这里）
+  const finish=()=>{
+    clearTimeout(watchdog);
+    stopped=true;                         // 立刻设标志，防止 abort 后还有 onresult 继续写文本
+    holding=false; sending=false;
+    if (listening){ try{ rec.abort(); }catch(e){} }
+    listening=false;
+    layer.classList.remove('on','cancel'); btn.classList.remove('on');
+    if (!state.busy) btn.textContent='按住 说话';
+  };
+  stopMic=finish;              // 把 finish 暴露出去，提交时能立刻停掉录音
+
+  // 松手后：把转出来的文字当成小朋友说的话发出去
+  const deliver=()=>{
+    if (stopped) return;                  // 已经发过 / 取消过了，别重复发送
+    const t=heard(); finish();
+    if (!t){ toast('没听清，再按住说一次吧～'); return; }
+    $('input').value=t; submit();
+  };
+
+  const startRec=()=>{
+    try{ rec.start(); }
+    catch(e){   // 上一轮还没彻底停下来，稍等再试一次
+      setTimeout(()=>{ if(!holding||stopped) return; try{ rec.start(); }catch(_){ finish(); toast('麦克风启动失败，再按一次试试'); } }, 300);
+    }
+  };
+  const press=e=>{
+    if (e.button>0 || holding || btn.disabled) return;
+    e.preventDefault();
+    if (state.phase!=='play'){ toast('先在地图上点一个出发站～'); return; }
+    try{ btn.setPointerCapture(e.pointerId); }catch(_){}
+    holding=true; sending=false; stopped=false; finalText=''; interim=''; recText.textContent=''; t0=Date.now();
+    btn.classList.add('on'); setZone(false);
+    layer.style.bottom=bar.offsetHeight+'px'; layer.classList.add('on');
+    startRec();
+    watchdog=setTimeout(release, 60000);   // 兜底：最长录 60 秒，到点自动松手发送
+  };
+  const release=()=>{
+    if (!holding) return;
+    holding=false; clearTimeout(watchdog);
+    if (cancelZone){ finish(); return; }
+    if (Date.now()-t0<400){ finish(); toast('说话时间太短'); return; }
+    if (!listening){ finish(); toast('麦克风还没准备好，再按住说一次'); return; }
+    sending=true; btn.textContent='转文字中…'; recTip.textContent='正在转成文字…';
+    watchdog=setTimeout(deliver, 2500);                // 兜底：onend 迟迟不来也照样发出去
+    try{ rec.stop(); }catch(e){ deliver(); }           // stop 会把最后一段识别结果交出来，onend 里发送
+  };
+  btn.addEventListener('pointerdown', press);
+  btn.addEventListener('pointermove', e=>{ if(holding){ setZone(e.clientY < btn.getBoundingClientRect().top-50); } });
+  btn.addEventListener('pointerup', release);
+  btn.addEventListener('pointercancel', ()=>{ if(holding){ cancelZone=true; release(); } });
+  btn.addEventListener('contextmenu', e=>e.preventDefault());   // iPad 长按别弹菜单
+
+  rec.onstart=()=>{ listening=true; if (stopped){ try{ rec.abort(); }catch(e){} } };
+  rec.onresult=e=>{
+    if (stopped) return;     // 已经停了，丢弃后续残留的识别结果
+    // 标准做法：只处理 resultIndex 之后的新结果，final 累加、interim 覆盖，避免重复拼接
+    let tmp='';
+    for (let i=(e.resultIndex||0); i<e.results.length; i++){
+      const r=e.results[i], txt=r[0] && r[0].transcript ? r[0].transcript : '';
+      if (r.isFinal) finalText += txt; else tmp += txt;
+    }
+    interim=tmp;
+    recText.textContent=heard();
+  };
+  rec.onerror=ev=>{
+    const err=ev&&ev.error;
+    if (err==='aborted' || err==='no-speech') return;   // 主动停掉 / 暂时没声音：松手时再处理
+    finish();
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+               || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1);
+    if (err==='not-allowed'||err==='service-not-allowed')
+      toast(isIOS ? '麦克风没开：iPad 设置 → Safari → 麦克风 打开，并确认 设置 → 通用 → 语言与地区 里有中文'
+                  : '麦克风权限被拒绝了，在地址栏左边允许一下');
+    else if (err==='network')   toast('语音识别要联网（Safari / Chrome 都走云端识别）');
+    else if (err==='audio-capture') toast('没找到麦克风，检查下 iPad 的麦克风有没有被挡住');
+    else toast('语音识别没成功，再按住说一次吧');
+  };
+  rec.onend=()=>{
+    listening=false;
+    if (stopped) return;
+    if (sending){ deliver(); return; }
+    if (holding){ finalText+=interim; interim=''; startRec(); }   // 还按着但浏览器自己停了：接着听
+  };
+
+  if (location.protocol==='file:')
+    toast('提示：用 file:// 打开时 Chrome 的语音识别可能不可用，双击用 Safari 打开更稳');
+}
+
+/* ---------- 地图缩放 / 拖拽平移 ---------- */
+const scroller=$('mapScroll'), svgEl=$('map');
+let zoom=1, fitZ=1, autoFit=true;
+const MINSCALE = 0.28, FITFLOOR = 0.46;   // 地图变大后，自动适应不再缩到看不清
+
+function setZoom(z, ax, ay){
+  const old = MAPW*zoom;
+  z = Math.max(MINSCALE, Math.min(4, z));
+  const k = (MAPW*z)/old;
+  const sl = scroller.scrollLeft, st = scroller.scrollTop;
+  zoom = z;
+  svgEl.style.width = (MAPW*zoom)+'px';
+  $('zoomPct').textContent = Math.round(zoom*100)+'%';
+  if (ax!=null && ay!=null){
+    scroller.scrollLeft = (sl+ax)*k - ax;
+    scroller.scrollTop  = (st+ay)*k - ay;
+  }
+  autoFit = false;
+}
+function centerAnchor(){ return [scroller.clientWidth/2, scroller.clientHeight/2]; }
+function fitMap(){
+  fitZ = Math.min((scroller.clientWidth-6)/MAPW, (scroller.clientHeight-6)/MAPH);
+  autoFit = true;
+  zoom = Math.max(MINSCALE, Math.min(1, Math.max(fitZ, Math.min(FITFLOOR, fitZ*1.9))));
+  svgEl.style.width = (MAPW*zoom)+'px';
+  $('zoomPct').textContent = Math.round(zoom*100)+'%';
+  scroller.scrollLeft = (MAPW*zoom - scroller.clientWidth)/2;
+  scroller.scrollTop  = (MAPH*zoom - scroller.clientHeight)/2;
+}
+function centerOn(st){
+  if (!st) return;
+  // viewBox 有偏移 MAPX/MAPY，站点的页面坐标要减掉它再乘缩放
+  scroller.scrollLeft = (st.x*S - MAPX)*zoom - scroller.clientWidth/2;
+  scroller.scrollTop  = (st.y*S - MAPY)*zoom - scroller.clientHeight/2;
+}
+function flashStation(name){
+  const rings=$('rings');
+  const st=stationMap.get(name); if(!st) return;
+  const html=`<circle cx="${st.x*S}" cy="${st.y*S}" r="16" fill="none" stroke="#FFD166" stroke-width="5">
+    <animate attributeName="r" values="14;46;14" dur="1.1s" repeatCount="2"/>
+    <animate attributeName="stroke-opacity" values="1;0;1" dur="1.1s" repeatCount="2"/></circle>`;
+  rings.insertAdjacentHTML('beforeend', html);
+  clearTimeout(flashStation._t);
+  flashStation._t = setTimeout(updateMap, 2300);   // updateMap 会重建 rings，闪圈自动消失
+}
+function centerOnXY(x,y){
+  scroller.scrollLeft = (x - MAPX)*zoom - scroller.clientWidth/2;
+  scroller.scrollTop  = (y - MAPY)*zoom - scroller.clientHeight/2;
+}
+
+/* ---------- 到站特效：到站时的一圈光波 + 小星星 ---------- */
+function burst(name){
+  const g=document.getElementById('fx'); const st=stationMap.get(name);
+  if(!g || !st) return;
+  const cx=st.x*S, cy=st.y*S, col='#FFD166';
+  let h=`<circle cx="${cx}" cy="${cy}" r="12" fill="none" stroke="${col}" stroke-width="7">
+      <animate attributeName="r" values="12;78;12" dur="1s" fill="freeze"/>
+      <animate attributeName="stroke-opacity" values=".95;0;0" dur="1s" fill="freeze"/></circle>
+    <circle cx="${cx}" cy="${cy}" r="12" fill="none" stroke="#7DD3FC" stroke-width="4">
+      <animate attributeName="r" values="12;58;12" dur="1s" begin="0.12s" fill="freeze"/>
+      <animate attributeName="stroke-opacity" values=".9;0;0" dur="1s" begin="0.12s" fill="freeze"/></circle>`;
+  for (let i=0;i<10;i++){
+    const a=(-Math.PI/2) + (Math.PI*2/10)*i;
+    const x2=cx+Math.cos(a)*66, y2=cy+Math.sin(a)*66;
+    h+=`<circle cx="${cx}" cy="${cy}" r="5" fill="${i%2?'#FCD34D':'#7DD3FC'}">
+      <animate attributeName="cx" values="${cx};${x2.toFixed(1)}" dur="0.85s" fill="freeze"/>
+      <animate attributeName="cy" values="${cy};${y2.toFixed(1)}" dur="0.85s" fill="freeze"/>
+      <animate attributeName="r" values="6;0" dur="0.85s" fill="freeze"/>
+      <animate attributeName="fill-opacity" values="1;0" dur="0.85s" fill="freeze"/></circle>`;
+  }
+  g.innerHTML=h;
+  clearTimeout(burst._t);
+  burst._t=setTimeout(()=>{ if(g) g.innerHTML=''; }, 1150);
+}
+
+/* ---------- 行驶特效：列车从 A 站开到 B 站 ---------- */
+function flyTrain(fromName,toName){
+  return new Promise(resolve=>{
+    const ride=document.getElementById('ride'), svg=document.getElementById('rideSvg');
+    if(!ride||!svg){ resolve(); return; }
+    const color = (LINES[state.line] && LINES[state.line].color) || '#FFD166';
+    // 透明弹窗里的场景：站台 A 在最左、站台 B 在最右，火车水平开行（约 3 秒）
+    const VW=1200, groundY=560, railTop=543, railBottom=557, carY=498;
+    const aX=150, bX=1050, pw=64;             // 站台中心 / 半宽
+    const startX=340, endX=860;              // 列车车身中心起止点
+    svg.setAttribute('viewBox', `0 370 ${VW} 300`);   // 只取铁轨一带：路灯、站台、列车（没有天空背景）
+
+    // 路灯：一根杆 + 灯臂 + 发光灯头（轻轻闪烁）
+    const lamp=(x)=>`<g transform="translate(${x} ${groundY})">
+        <rect x="-4" y="-150" width="8" height="150" rx="3" fill="#1E2A3E"/>
+        <path d="M0 -150 q42 -2 48 -8" stroke="#1E2A3E" stroke-width="7" fill="none" stroke-linecap="round"/>
+        <g transform="translate(48 -148)">
+          <circle r="27" fill="#FFE9A8" fill-opacity=".16"><animate attributeName="fill-opacity" values=".22;.1;.22" dur="2.6s" repeatCount="indefinite"/></circle>
+          <ellipse rx="20" ry="12" fill="#FFE9A8"/>
+          <circle r="9" fill="#FFF6D8"><animate attributeName="fill-opacity" values="1;.75;1" dur="2.6s" repeatCount="indefinite"/></circle>
+        </g></g>`;
+
+    // 地铁列车（车头朝右，带线路色腰线、车窗、车头灯）
+    const TRAIN = `<g id="rCar">
+        <ellipse cx="0" cy="50" rx="116" ry="13" fill="#000" fill-opacity=".16"/>
+        <rect x="-118" y="-30" width="236" height="60" rx="22" fill="#F4F7FB" stroke="${color}" stroke-width="4"/>
+        <rect x="-118" y="-30" width="236" height="18" rx="11" fill="${color}"/>
+        <rect x="-104" y="-6" width="200" height="20" rx="8" fill="${color}" fill-opacity=".5"/>
+        <rect x="-112" y="-8" width="44" height="26" rx="10" fill="#0E2336"/>
+        <rect x="-106" y="-3" width="32" height="15" rx="6" fill="#9FE0FF" fill-opacity=".9"/>
+        <g fill="#0E2336" fill-opacity=".85">
+          <rect x="-54" y="-4" width="28" height="18" rx="5"/>
+          <rect x="-18" y="-4" width="28" height="18" rx="5"/>
+          <rect x="18" y="-4" width="28" height="18" rx="5"/>
+          <rect x="54" y="-4" width="28" height="18" rx="5"/>
+        </g>
+        <circle cx="110" cy="6" r="7" fill="#FFE066"/>
+        <rect x="86" y="4" width="30" height="8" rx="4" fill="${color}"/>
+        <g stroke="${color}" stroke-width="2.5" stroke-opacity=".7">
+          <line x1="-72" y1="-6" x2="-72" y2="26"/>
+          <line x1="0" y1="-6" x2="0" y2="26"/>
+          <line x1="72" y1="-6" x2="72" y2="26"/>
+        </g>
+        <g fill="#1B2433">
+          <circle cx="-72" cy="34" r="12"/><circle cx="0" cy="34" r="12"/><circle cx="72" cy="34" r="12"/>
+        </g>
+      </g>`;
+
+    const station=(cx,emoji,name)=>`<g>
+        <rect x="${cx-pw}" y="${groundY}" width="${pw*2}" height="68" rx="12" fill="#16263A" stroke="${color}" stroke-width="4"/>
+        <rect x="${cx-pw}" y="${groundY}" width="${pw*2}" height="12" rx="6" fill="${color}" fill-opacity=".55"/>
+        <text x="${cx}" y="${groundY-22}" text-anchor="middle" font-size="46" font-weight="800" font-family="sans-serif">${emoji}</text>
+        <text x="${cx}" y="${groundY+46}" text-anchor="middle" font-size="26" fill="#fff" font-weight="800" font-family="sans-serif">${esc(name)}</text>
+      </g>`;
+
+    // 铁轨：一排枕木 + 两条钢轨（铺在地铁下面）
+    let track='';
+    for(let x=0; x<=VW; x+=46){
+      track += `<rect x="${x}" y="540" width="16" height="20" rx="3" fill="#5A6478"/>`;
+    }
+
+    svg.innerHTML =
+      `${lamp(400)} ${lamp(600)} ${lamp(800)}
+       ${track}
+       <line x1="0" y1="${railTop}" x2="${VW}" y2="${railTop}" stroke="#8B97AC" stroke-width="5"/>
+       <line x1="0" y1="${railBottom}" x2="${VW}" y2="${railBottom}" stroke="#8B97AC" stroke-width="5"/>
+       <line id="rRail" x1="${startX}" y1="${railTop}" x2="${startX}" y2="${railTop}" stroke="${color}" stroke-width="14" stroke-linecap="round" stroke-opacity=".95"/>
+       <line id="rGlow" x1="${startX}" y1="${railTop}" x2="${startX}" y2="${railTop}" stroke="${color}" stroke-width="40" stroke-linecap="round" stroke-opacity=".16"/>
+       ${station(aX,'🚉',fromName)}
+       ${station(bX,'🎯',toName)}
+       ${TRAIN}`;
+
+    const rail=svg.querySelector('#rRail'), glow=svg.querySelector('#rGlow'), car=svg.querySelector('#rCar');
+    car.setAttribute('transform', `translate(${startX} ${carY})`);
+
+    const cap=document.getElementById('rideCap');
+    if(cap) cap.textContent = `🚉 ${fromName}　→　🎯 ${toName}`;
+
+    let skip=false;
+    ride.onclick=()=>{ skip=true; };        // 点一下跳过动画
+    ride.style.display='flex';
+    requestAnimationFrame(()=>ride.classList.add('show'));
+
+    const t0=performance.now(), dur=3000;
+    let chuff=0, braked=false;
+    trainHorn();                              // 出发鸣笛
+    const step=now=>{
+      let p=Math.min(1,(now-t0)/dur); if(skip) p=1;
+      const e = p<.5 ? 2*p*p : 1-Math.pow(-2*p+2,2)/2;      // easeInOutQuad，总时长 3 秒
+      const x=startX+(endX-startX)*e;
+      car.setAttribute('transform', `translate(${x.toFixed(1)} ${carY})`);
+      rail.setAttribute('x2',x.toFixed(1)); rail.setAttribute('y2',railTop);
+      glow.setAttribute('x2',x.toFixed(1)); glow.setAttribute('y2',railTop);
+      const want=Math.floor(p*8);
+      if (want>chuff){ chuff=want; if (!skip) trainClack(); }   // 咔哒咔哒
+      if (p>=.78 && !braked){ braked=true; trainBrake(); }       // 减速进站：刹车嘶声
+      if (p<1) requestAnimationFrame(step);
+      else {
+        rideBurst(svg, endX, carY-6, color);
+        settleTrain(car, endX, carY, 0, '', ()=>{
+          ride.onclick=null;
+          setTimeout(()=>{ ride.classList.remove('show'); setTimeout(()=>{ ride.style.display='none'; resolve(); }, 320); }, 700);
+        });
+      }
+    };
+    requestAnimationFrame(step);
+  });
+}
+
+/* 到站全屏礼花（在 ride 覆盖层里放一圈光波 + 小星星） */
+function rideBurst(svg, cx, cy, col){
+  let h=`<g class="rburst">
+    <circle cx="${cx}" cy="${cy}" r="16" fill="none" stroke="${col}" stroke-width="9"><animate attributeName="r" values="16;150;16" dur="1s" fill="freeze"/><animate attributeName="stroke-opacity" values=".95;0;0" dur="1s" fill="freeze"/></circle>
+    <circle cx="${cx}" cy="${cy}" r="16" fill="none" stroke="#7DD3FC" stroke-width="6"><animate attributeName="r" values="16;110;16" dur="1s" begin="0.12s" fill="freeze"/><animate attributeName="stroke-opacity" values=".9;0;0" dur="1s" begin="0.12s" fill="freeze"/></circle>`;
+  for(let i=0;i<14;i++){ const a=(-Math.PI/2)+(Math.PI*2/14)*i, x2=cx+Math.cos(a)*120, y2=cy+Math.sin(a)*120;
+    h+=`<circle cx="${cx}" cy="${cy}" r="7" fill="${i%2?'#FCD34D':'#7DD3FC'}"><animate attributeName="cx" values="${cx};${x2.toFixed(1)}" dur=".9s" fill="freeze"/><animate attributeName="cy" values="${cy};${y2.toFixed(1)}" dur=".9s" fill="freeze"/><animate attributeName="r" values="8;0" dur=".9s" fill="freeze"/><animate attributeName="fill-opacity" values="1;0" dur=".9s" fill="freeze"/></circle>`; }
+  h+='</g>';
+  svg.insertAdjacentHTML('beforeend', h);
+  setTimeout(()=>{ const g=svg.querySelector('.rburst'); if(g) g.remove(); }, 1200);
+}
+
+/* 小火车进站停靠：到站时轻轻弹两下，像真的减速停稳 */
+function settleTrain(car, x, y, ang, flip, done){
+  const t0=performance.now(), D=700;
+  const step=now=>{
+    const p=Math.min(1,(now-t0)/D);
+    const bob=Math.sin(p*Math.PI*3)*(1-p)*3.2;
+    car.setAttribute('transform', `translate(${x} ${y+bob}) rotate(${ang})${flip}`);
+    if (p<1) requestAnimationFrame(step); else done();
+  };
+  requestAnimationFrame(step);
+}
+
+$('zoomIn').onclick =()=>{ const [ax,ay]=centerAnchor(); setZoom(zoom*1.25, ax, ay); };
+$('zoomOut').onclick=()=>{ const [ax,ay]=centerAnchor(); setZoom(zoom/1.25, ax, ay); };
+$('zoomFit').onclick=fitMap;
+
+scroller.addEventListener('wheel',e=>{
+  if (e.ctrlKey||e.metaKey){
+    e.preventDefault();
+    const r=scroller.getBoundingClientRect();
+    setZoom(zoom*(e.deltaY<0?1.13:1/1.13), e.clientX-r.left, e.clientY-r.top);
+  }
+}, {passive:false});
+
+/* 平移 + 捏合缩放：鼠标和触屏都走这里（.map-scroll 设了 touch-action:none） */
+let dragging=false, moved=0, sx=0, sy=0, sl=0, stp=0;
+let captured=null;
+const pts=new Map();            // pointerId -> {x,y}
+let pinchStart=null;            // 双指起始状态
+
+const mid=()=>{
+  const v=[...pts.values()];
+  return {x:(v[0].x+v[1].x)/2, y:(v[0].y+v[1].y)/2,
+          d:Math.hypot(v[0].x-v[1].x, v[0].y-v[1].y)};
+};
+const resetGesture=()=>{ pts.clear(); pinchStart=null; captured=null; };
+
+scroller.addEventListener('pointerdown',e=>{
+  if (e.pointerType==='mouse' && e.button!==0) return;
+  pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if (pts.size===1){
+    dragging=true; moved=0; sx=e.clientX; sy=e.clientY; sl=scroller.scrollLeft; stp=scroller.scrollTop;
+    // 注意：这里不立即捕获指针，否则会抢走 click，导致点不中站台
+  } else if (pts.size===2){
+    dragging=false;                       // 进入捏合模式，不再平移
+    moved=99;                             // 双指抬手时不要触发点站
+    const m=mid();
+    const r=scroller.getBoundingClientRect();
+    pinchStart={ d:m.d, zoom, ax:m.x-r.left, ay:m.y-r.top };
+    // 捏合时立刻捕获，避免手指移出地图后收不到事件
+    try{ scroller.setPointerCapture(e.pointerId); }catch(_){}
+  }
+});
+scroller.addEventListener('pointermove',e=>{
+  if (!pts.has(e.pointerId)) return;
+  pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
+
+  if (pts.size>=2 && pinchStart){
+    const m=mid();
+    if (pinchStart.d>8) setZoom(pinchStart.zoom * (m.d/pinchStart.d), pinchStart.ax, pinchStart.ay);
+    e.preventDefault();
+    return;
+  }
+  if (!dragging) return;
+  const dx=e.clientX-sx, dy=e.clientY-sy;
+  moved=Math.max(moved, Math.abs(dx)+Math.abs(dy));
+  if (moved>4){
+    scroller.classList.add('dragging');
+    if (captured===null){ try{ scroller.setPointerCapture(e.pointerId); captured=e.pointerId; }catch(_){ captured=-1; } }
+  }
+  if (moved>4){ scroller.scrollLeft = sl-dx; scroller.scrollTop = stp-dy; }
+});
+const endDrag=e=>{
+  pts.delete(e.pointerId);
+  if (captured!==null && captured!==-1){ try{ scroller.releasePointerCapture(captured); }catch(_){} }
+  if (pts.size<2) pinchStart=null;
+  if (pts.size>0) return;                 // 还有手指按着
+  if (dragging || moved){
+    dragging=false;
+    scroller.classList.remove('dragging');
+    // moved 故意不清零：click 事件在 pointerup 之后触发，靠它判断「刚拖动过就不算点站」；
+    // 下一次 pointerdown 会重新归零，所以不影响之后的点击
+  }
+  resetGesture();
+};
+scroller.addEventListener('pointerup',endDrag);
+scroller.addEventListener('pointercancel',endDrag);
+scroller.addEventListener('pointerleave',e=>{ if(e.pointerType!=='mouse') endDrag(e); });
+
+/* 键盘方向键也能平移 */
+document.addEventListener('keydown',e=>{
+  if (['INPUT','TEXTAREA'].includes(document.activeElement.tagName)) return;
+  const step=80;
+  if (e.key==='ArrowLeft')  { scroller.scrollLeft-=step; e.preventDefault(); }
+  if (e.key==='ArrowRight') { scroller.scrollLeft+=step; e.preventDefault(); }
+  if (e.key==='ArrowUp')    { scroller.scrollTop-=step;  e.preventDefault(); }
+  if (e.key==='ArrowDown')  { scroller.scrollTop+=step;  e.preventDefault(); }
+});
+
+let rzT=null;
+window.addEventListener('resize',()=>{
+  clearTimeout(rzT);
+  rzT=setTimeout(()=>{ if (autoFit) fitMap(); },120);
+});
+
+/* 出发 */
+document.getElementById('map').addEventListener('click',e=>{
+  if (moved>5) return;              // 刚拖动过，不当作点站
+  const hit=e.target.closest('.hit'); if(!hit) return;
+  speakStation(hit.dataset.name);   // 点任意站都报站名
+  if (state.phase==='setup') startAt(hit.dataset.name);
+  else if (state.phase==='play'){
+    const n=hit.dataset.name;
+    if (n===state.cur && stationMap.get(n).lines.length>1) toast('🚉 这里是换乘站，用右边的按钮换线路或换话题');
+  }
+});
+
+/* ---------- 找车站（站点变多后靠它定位） ---------- */
+const sInput=$('stationSearch'), sRes=$('searchRes');
+function renderSearch(q){
+  q=(q||'').trim();
+  if (!q){ sRes.style.display='none'; sRes.innerHTML=''; return; }
+  const hits=[...stationMap.values()]
+    .filter(st=>st.name.includes(q))
+    .sort((a,b)=> (a.name.indexOf(q)-b.name.indexOf(q)) || (b.lines.length-a.lines.length))
+    .slice(0,12);
+  sRes.innerHTML = hits.length
+    ? hits.map(st=>`<div data-name="${st.name}">${st.name}<small>${st.lines.map(l=>LINES[l].name).join('/')}${st.lines.length>1?' 换乘':''}</small></div>`).join('')
+    : `<div class="none">没有叫「${q}」的车站</div>`;
+  sRes.style.display='';
+}
+function pickSearch(name){
+  document.querySelectorAll('.lbl.found').forEach(el=>{ el.classList.remove('found'); if(!el.classList.contains('hub')) el.classList.remove('show'); });
+  const lbl=document.querySelector(`.lbl[data-name="${name}"]`);
+  if (lbl) lbl.classList.add('found','show');
+  centerOn(stationMap.get(name));
+  flashStation(name);
+  beep(760,.07);
+  toast(state.phase==='setup' ? `找到 ${name} —— 点地图上的圆点就从这儿出发` : `已定位到 ${name}`);
+  sInput.value=name; renderSearch(name);
+}
+sInput.addEventListener('input',()=>renderSearch(sInput.value));
+sInput.addEventListener('keydown',e=>{
+  if (e.key==='Escape'){ sInput.value=''; renderSearch(''); sInput.blur(); }
+  if (e.key==='Enter'){ const f=sRes.querySelector('div[data-name]'); if (f) pickSearch(f.dataset.name); }
+});
+sRes.addEventListener('click',e=>{ const d=e.target.closest('div[data-name]'); if(d) pickSearch(d.dataset.name); });
+document.addEventListener('click',e=>{ if(!e.target.closest('.searchbox')){ sRes.style.display='none'; } });
+sInput.addEventListener('focus',()=>renderSearch(sInput.value));
+
+/* ---------- 图例：点一下只看某条线 ---------- */
+$('legend').addEventListener('click',e=>{
+  const el=e.target.closest('.lg'); if(!el) return;
+  lineFilter = (el.dataset.line==='ALL' || el.dataset.line===lineFilter) ? 'ALL' : el.dataset.line;
+  applyLineFilter();
+  beep(620,.05);
+});
+
+/* ---------- 鼠标经过显示普通站名 ---------- */
+$('map').addEventListener('mouseover',e=>{
+  const n=e.target && e.target.dataset ? e.target.dataset.name : null; if(!n) return;
+  const lbl=document.querySelector(`.lbl[data-name="${n}"]`); if(lbl) lbl.classList.add('show');
+});
+$('map').addEventListener('mouseout',e=>{
+  const n=e.target && e.target.dataset ? e.target.dataset.name : null; if(!n) return;
+  if (n===state.cur || n===state.dest) return;
+  const lbl=document.querySelector(`.lbl[data-name="${n}"]`); if(lbl) lbl.classList.remove('show');
+});
+
+renderMap(); syncUI(); updateMap(); fitMap();
+$('metaSub').textContent = `深圳地铁 · ${Object.keys(LINES).length} 线 ${stationMap.size} 站 · 真实站名`;
+
+/* 到站后把小火车滚进视野 */
+const _origUpdate = updateMap;
+updateMap = function(){
+  _origUpdate();
+  if (state.cur && zoom > fitZ*1.05) centerOn(stationMap.get(state.cur));
+};
+
+showModal(`<div class="big">🚇</div><h3>佑佑的地铁话题大冒险</h3>
+  <p>深圳地铁 <b>${Object.keys(LINES).length} 条线</b> · <b>${stationMap.size} 个站</b> · ${[...stationMap.values()].filter(s=>s.lines.length>1).length} 个换乘站，真实站名与站序<br>
+  选一个站出发 → <b>🎤 说一个你想聊的话题</b> → 说得接得上，小火车才肯开到下一站。<br>
+  <span style="font-size:12.5px">地图：按住拖动平移 · 按钮/滚轮缩放 · 方向键移动 · 右下角 🔍 可以直接搜站名 · 点图例只看一条线</span></p>
+  <button class="btn primary" onclick="closeModal()">选个站出发</button>`);
+</script>
+
+  <!-- 全屏火车 ride 动画（答对时从 A 站开到 B 站） -->
+  <div id="ride">
+    <div class="ride-box">
+      <svg id="rideSvg" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg"></svg>
+      <div id="rideCap"></div>
+      <div class="hint">点一下可以跳过 ✨</div>
+    </div>
+  </div>
+  <!-- 夸张表扬横幅（说得特别好时弹出） -->
+  <div id="hype"></div>
+  <!-- 答对先显示的勾号（粗线条 ✓，和叉叉一样粗，持续约 2 秒再开地铁） -->
+  <div class="bigmark check" id="check"><svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><path d="M20 52 L42 74 L82 26" fill="none" stroke="currentColor" stroke-width="18" stroke-linecap="square" stroke-linejoin="miter"/></svg></div>
+
+</body>
+</html>
