@@ -435,7 +435,7 @@
   <header data-page-node-id="js5tWOG9rgpMFnw0p5IKZD">
     <h1 data-page-node-id="nqBUdOPMzvUrfOqMTDIc4j">🚇 佑佑的地铁话题大冒险 <span class="sub" id="metaSub" data-page-node-id="AkpfmNCRJFW47yjzY5XDof">深圳地铁 · 真实站名</span></h1>
     <div class="spacer" data-page-node-id="fChRAetgWbtpNbbMMOxkBf"></div>
-    <a class="btn" id="homeBtn" href="index.html" style="text-decoration:none;display:inline-block">🏠 主页</a>
+    <a class="btn" id="homeBtn" href="/" style="text-decoration:none;display:inline-block">🏠 游戏屋</a>
     <button class="btn" id="cfgBtn">⚙️ AI 对话</button>
     <button class="btn" id="saveBtn">💾 保存本局</button>
     <button class="btn" id="helpBtn" data-page-node-id="r6OMmDhv4jxju7YtZZPDeT">玩法说明</button>
@@ -943,7 +943,7 @@ const LAN_URL='https://192.168.3.88:8727/youyou-metro-topic-game.html';
 fetch('api/health',{cache:'no-store'}).then(r=>r.ok?r.json():null)
   .then(j=>{ if(j&&j.amp){
     ampAI=true; updateCfgBtn();
-    $('homeBtn').href=new URL('index.html', LAN_URL).href;   // Amp 托管版没有主页，「🏠 主页」回局域网主页（唯一入口）
+    $('homeBtn').href=new URL('/', LAN_URL).href;   // Amp 托管版没有主页，「🏠 游戏屋」回局域网游戏屋（唯一入口）
   } }).catch(()=>{});
 
 async function aiScore(text, topicName){

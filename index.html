@@ -7,10 +7,13 @@
   <style>
     html, body { margin: 0; height: 100%; background: #0b0820; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; }
     canvas { display: block; width: 100vw; height: 100vh; cursor: none; }
+    .home { position: fixed; left: 12px; bottom: 12px; z-index: 10; padding: 6px 12px; border-radius: 999px; background: rgba(0,0,0,.35); color: rgba(255,255,255,.8); font: 600 13px system-ui, sans-serif; text-decoration: none; cursor: pointer; }
+    .home:hover { color: #fff; background: rgba(0,0,0,.55); }
   </style>
 </head>
 <body>
   <canvas id="c"></canvas>
+  <a class="home" href="/">🏠 游戏屋</a>
   <script src="game.js"></script>
 </body>
 </html>
