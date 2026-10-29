@@ -1,0 +1,8 @@
+{
+  "name": "star-hero",
+  "private": true,
+  "description": "星星小勇士：孩子的积分奖励小游戏",
+  "scripts": {
+    "start": "node server.js"
+  }
+}
