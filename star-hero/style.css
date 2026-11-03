@@ -257,14 +257,41 @@ input { font: inherit; color: inherit; }
     linear-gradient(#d9a066, #b0713a);
   box-shadow: 0 8px 10px rgba(80, 40, 10, 0.25);
 }
+.goods-slot { position: relative; display: flex; flex-direction: column; }
 .goods {
   position: relative;
   display: flex;
+  flex: 1;
   flex-direction: column;
   align-items: center;
   padding: 0;
   border: 0;
   background: none;
+}
+/* Bought today: a "×N" sticker and an undo pill above the goods. */
+.goods-count {
+  position: absolute;
+  top: 2px;
+  left: 4px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--red);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 900;
+  pointer-events: none;
+}
+.goods-undo {
+  position: absolute;
+  top: 0;
+  right: 0;
+  padding: 2px 8px;
+  border: 2px solid #9c5f2c;
+  border-radius: 999px;
+  background: #fff8ec;
+  color: #7d4a20;
+  font-size: 12px;
+  font-weight: 800;
 }
 .goods-icon {
   display: flex;
@@ -279,8 +306,8 @@ input { font: inherit; color: inherit; }
 .goods-icon img { width: 68px; height: 68px; border-radius: 14px; object-fit: cover; }
 .goods:not(.can) .goods-icon { filter: grayscale(0.4) opacity(0.8) drop-shadow(0 5px 3px rgba(60, 30, 5, 0.25)); }
 .goods.can .goods-icon { animation: bob 1.8s ease-in-out infinite; }
-.goods:nth-child(2).can .goods-icon { animation-delay: -0.6s; }
-.goods:nth-child(3).can .goods-icon { animation-delay: -1.2s; }
+.goods-slot:nth-child(2) .goods.can .goods-icon { animation-delay: -0.6s; }
+.goods-slot:nth-child(3) .goods.can .goods-icon { animation-delay: -1.2s; }
 .goods:active .goods-icon { transform: scale(0.9); }
 @keyframes bob { 50% { transform: translateY(-6px); } }
 
@@ -302,8 +329,8 @@ input { font: inherit; color: inherit; }
   transform: rotate(-2deg);
   transform-origin: top center;
 }
-.goods:nth-child(2) .price-tag { transform: rotate(2deg); }
-.goods:nth-child(3) .price-tag { transform: rotate(-1deg); }
+.goods-slot:nth-child(2) .price-tag { transform: rotate(2deg); }
+.goods-slot:nth-child(3) .price-tag { transform: rotate(-1deg); }
 .price-tag::before {
   content: "";
   position: absolute;
@@ -496,6 +523,23 @@ input:focus { border-color: var(--orange); }
 
 .btn.wide { width: 100%; margin-top: 12px; }
 
+/* Suggested tasks / rewards under the edit lists. */
+.suggest { margin-top: 14px; padding-top: 10px; border-top: 1px dashed #eadfce; }
+.suggest summary { color: var(--orange); font-weight: 800; cursor: pointer; }
+.suggest-group { margin: 12px 0 6px; color: var(--muted); font-size: 13px; font-weight: 800; }
+.suggest-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.suggest-chip {
+  padding: 6px 10px;
+  border: 2px solid #f0d9b5;
+  border-radius: 999px;
+  background: #fffaf0;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 700;
+}
+.suggest-chip:active { transform: scale(0.95); }
+.suggest .hint { margin: 10px 0 0; }
+
 .modal-card.editor { text-align: left; }
 .modal-card.editor h3 { text-align: center; margin-bottom: 14px; }
 .editor .field { margin-bottom: 12px; }
@@ -512,6 +556,7 @@ input:focus { border-color: var(--orange); }
 .rec .e-name { flex: 1; min-width: 0; font-weight: 700; }
 .rec .e-name small { display: block; color: var(--muted); font-size: 12px; font-weight: 400; }
 .rec .e-pts { color: #c98a00; font-weight: 800; white-space: nowrap; }
+.rec.buy .e-pts { color: var(--red); }
 
 /* ---------- Tabs ---------- */
 .tabs {
@@ -744,6 +789,7 @@ input:focus { border-color: var(--orange); }
 .m-shake { animation: shakeX 0.3s ease-in-out infinite alternate; }
 .m-breathe { animation: breathe 1.6s ease-in-out infinite; }
 .m-dance { animation: dance 0.5s ease-in-out infinite alternate; }
+.m-ride { animation: ride 0.6s ease-in-out infinite alternate; }
 .theme-kindergarten .scene-kid { width: min(86vw, 330px); }
 @keyframes wiggle { from { transform: rotate(-5deg) translateX(-4px); } to { transform: rotate(5deg) translateX(4px); } }
 @keyframes hop { from { transform: translateY(0) scaleY(0.96); } to { transform: translateY(-36px); } }
@@ -753,6 +799,94 @@ input:focus { border-color: var(--orange); }
 @keyframes shakeX { from { transform: translateX(-6px) rotate(-1deg); } to { transform: translateX(6px) rotate(1deg); } }
 @keyframes breathe { 50% { transform: scale(1.04); } }
 @keyframes dance { from { transform: rotate(-3deg) translateY(0); } to { transform: rotate(3deg) translateY(-14px); } }
+@keyframes ride { from { transform: translateX(-18px) rotate(-1deg); } to { transform: translateX(18px) translateY(-4px) rotate(1deg); } }
+
+/* Shop: the reward drops from the shelf into a cart that rolls in above the tab bar. */
+.cart {
+  position: fixed;
+  left: 50%;
+  bottom: calc(96px + env(safe-area-inset-bottom));
+  z-index: 25;
+  font-size: 84px;
+  line-height: 1;
+  pointer-events: none;
+  transform: translateX(-50%);
+  animation: cartIn 0.35s ease-out;
+  transition: transform 0.45s ease-in, opacity 0.45s;
+}
+.cart.bump { animation: cartBump 0.4s; }
+.cart.leave { opacity: 0; transform: translateX(60vw); }
+@keyframes cartIn { from { transform: translateX(-60vw); } }
+@keyframes cartBump { 40% { transform: translateX(-50%) translateY(8px) scaleY(0.9); } 70% { transform: translateX(-50%) translateY(-6px); } }
+.cart-drop {
+  position: fixed;
+  z-index: 26;
+  font-size: 54px;
+  line-height: 1;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+}
+.cart-drop img { display: block; width: 68px; height: 68px; border-radius: 14px; object-fit: cover; }
+
+/* Math card: "12 + 2 = ?" for tasks, "20 − 8 = ?" at the shop checkout. */
+.quiz-card { position: relative; padding-top: 18px; }
+.quiz-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 50%;
+  background: #f3ebe0;
+  color: var(--muted);
+  font-size: 16px;
+  font-weight: 900;
+}
+.quiz-head { color: var(--orange); font-size: 18px; font-weight: 900; }
+.quiz-item { position: relative; display: flex; justify-content: center; align-items: flex-end; height: 84px; margin-top: 4px; }
+.quiz-icon { font-size: 60px; line-height: 1; }
+.quiz-icon img { display: block; width: 72px; height: 72px; border-radius: 16px; object-fit: cover; }
+.quiz-cart-basket { display: none; }
+/* Checkout: the reward sits in the cart. */
+.checkout .quiz-item { height: 100px; }
+.checkout .quiz-cart-basket { display: block; font-size: 92px; line-height: 1; }
+.checkout .quiz-icon { position: absolute; bottom: 52px; left: 50%; z-index: 1; font-size: 44px; transform: translateX(-30%) rotate(-8deg); }
+.checkout .quiz-icon img { width: 50px; height: 50px; border-radius: 12px; }
+.quiz-card h3 { margin: 6px 0 12px; }
+.quiz-eq { display: flex; align-items: flex-end; justify-content: center; gap: 6px; }
+.eq-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 70px;
+  padding: 6px 8px 8px;
+  border-radius: 16px;
+  background: #fff3c4;
+}
+.eq-col small { color: var(--muted); font-size: 12px; font-weight: 800; white-space: nowrap; }
+.eq-col b { color: #e67e22; font-size: 34px; font-weight: 900; line-height: 1.1; }
+.eq-col b::after { content: "⭐"; font-size: 18px; }
+.eq-col:last-child { border: 3px dashed #f0b429; background: #fff; }
+.eq-col:last-child.solved { border-style: solid; border-color: var(--green); background: var(--green-soft); animation: pop 0.4s; }
+.eq-col:last-child.solved b { color: #23995a; }
+.eq-op { padding-bottom: 12px; color: var(--ink); font-size: 30px; font-weight: 900; }
+.quiz-card .quiz-tip { margin: 14px 0 12px; color: var(--ink); font-weight: 800; }
+.quiz-card .quiz-tip.oops { color: var(--red); }
+.quiz-choices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.quiz-choice {
+  padding: 14px 0;
+  border: 3px solid #f0b429;
+  border-radius: 18px;
+  background: #fff8e1;
+  box-shadow: 0 5px 0 #f0b429;
+  color: #c0392b;
+  font-size: 30px;
+  font-weight: 900;
+}
+.quiz-choice:active { transform: translateY(3px); box-shadow: 0 2px 0 #f0b429; }
+.quiz-choice.wrong { border-color: #ddd; background: #f4f4f4; box-shadow: none; color: #bbb; animation: shake 0.4s; }
+.quiz-choice.right { border-color: var(--green); background: var(--green); box-shadow: 0 5px 0 #23995a; color: #fff; animation: pop 0.4s; }
 
 @media (max-width: 380px) {
   .hello { font-size: 17px; }

@@ -41,6 +41,7 @@ const DEFAULT_STATE = {
   ],
   // Task records are the source of truth for completions, streaks and the "today" checkmarks.
   records: [], // { id, taskId, name, icon, points, t, by: { username, role } }, newest first
+  redemptions: [], // shop purchases: { id, rewardId, name, icon, cost, t, by }, newest first
   bonusDays: [],
   history: [], // other star changes: { t, icon, text, amount, by?, type?, date? }
 };
@@ -79,6 +80,17 @@ function withDefaults(saved) {
     }
     s.records.sort((a, b) => b.t - a.t);
     delete s.days;
+  }
+  // Older data kept purchases only as history lines ("兑换：…"); turn those into redemption records.
+  const bought = s.history.filter((h) => h.amount < 0 && h.text?.startsWith("兑换："));
+  if (bought.length) {
+    for (const h of bought) {
+      const name = h.text.slice(3);
+      const rewardId = s.rewards.find((r) => r.name === name)?.id ?? null;
+      s.redemptions.push({ id: newId("buy"), rewardId, name, icon: h.icon, cost: -h.amount, t: h.t, by: h.by ?? null });
+    }
+    s.redemptions.sort((a, b) => b.t - a.t);
+    s.history = s.history.filter((h) => !bought.includes(h));
   }
   return s;
 }
@@ -290,6 +302,20 @@ function undoTask(task) {
   });
 }
 
+// Tapping a task: the kid first adds the task's stars to the wallet, and only a right answer counts it.
+async function startTask(task) {
+  const ok = await mathQuiz({
+    item: task,
+    title: task.name,
+    a: state.balance,
+    b: task.points,
+    op: "+",
+    labels: ["现在有", "完成任务", "一共有"],
+    tip: "算一算，现在一共有几颗星星？",
+  });
+  if (ok) completeTask(task);
+}
+
 // A task can be completed any number of times; each completion is its own record.
 function completeTask(task) {
   const today = dateKey();
@@ -317,7 +343,11 @@ function completeTask(task) {
   announceNewBadges(badgesBefore, allDone ? 5200 : 2600);
 }
 
-function redeem(reward, el) {
+// Tapping a reward: it drops into the shopping cart, then at the checkout the kid works out
+// the stars left (before − price = after); a right answer completes the purchase.
+let shopping = false;
+async function redeem(reward, el) {
+  if (shopping) return;
   if (state.balance < reward.cost) {
     el.classList.remove("shake");
     void el.offsetWidth;
@@ -326,17 +356,164 @@ function redeem(reward, el) {
     toast(`还差 ${reward.cost - state.balance} 颗星星，继续加油！💪`);
     return;
   }
-  confirmModal(reward.icon, `兑换「${reward.name}」？`, `需要花费 ${reward.cost} 颗星星`, "确定兑换", () => {
-    const badgesBefore = earnedBadges();
-    state.redeemed += 1;
-    addStars(-reward.cost, reward.icon, `兑换：${reward.name}`);
+  shopping = true;
+  const cart = await dropIntoCart(el.querySelector(".goods-icon"), reward);
+  cart.classList.add("leave"); // the checkout card shows the reward in the cart from here on
+  setTimeout(() => cart.remove(), 500);
+  const ok = await mathQuiz({
+    item: reward,
+    title: reward.name,
+    a: state.balance,
+    b: reward.cost,
+    op: "−",
+    labels: ["兑换前", "价格", "兑换后"],
+    tip: "算一算，兑换后还剩几颗星星？",
+    checkout: true,
+  });
+  shopping = false;
+  if (!ok) return toast("商品放回货架啦，下次再来～");
+  if (state.balance < reward.cost) return toast("星星不够啦，家人可能刚刚用掉了一些"); // a family member's change arrived meanwhile
+
+  const badgesBefore = earnedBadges();
+  state.redemptions.unshift({ id: newId("buy"), rewardId: reward.id, name: reward.name, icon: reward.icon, cost: reward.cost, t: Date.now(), by: byMe() });
+  state.balance -= reward.cost;
+  state.redeemed += 1;
+  save();
+  render();
+  confetti();
+  playSound("win");
+  infoModal(reward.icon, "兑换成功！", `快去找爸爸妈妈领取「${reward.name}」吧！`);
+  announceNewBadges(badgesBefore, 2500);
+}
+
+function deleteRedemption(buy) {
+  buy = state.redemptions.find((b) => b.id === buy.id); // the state may have been refreshed since buy was read
+  if (!buy) return;
+  state.redemptions = state.redemptions.filter((b) => b.id !== buy.id);
+  state.balance += buy.cost;
+  state.redeemed = Math.max(0, state.redeemed - 1);
+}
+
+function updateRedemption(buy, { t, cost }) {
+  state.balance -= cost - buy.cost;
+  Object.assign(buy, { t, cost });
+  state.redemptions.sort((a, b) => b.t - a.t);
+}
+
+// Undo the most recent purchase of this reward today; its stars go back into the wallet.
+function undoReward(reward) {
+  const today = dateKey();
+  const latest = state.redemptions.find((b) => b.rewardId === reward.id && recordDate(b) === today);
+  if (!latest) return;
+  confirmModal("🤔", `撤销一次「${reward.name}」？`, `${latest.cost} 颗星星会退回，这条兑换记录也会删除`, "撤销", () => {
+    deleteRedemption(latest);
     save();
     render();
-    confetti();
-    playSound("win");
-    infoModal(reward.icon, "兑换成功！", `快去找爸爸妈妈领取「${reward.name}」吧！`);
-    announceNewBadges(badgesBefore, 2500);
+    toast(`已退回 ${latest.cost} 颗星星`);
   });
+}
+
+// The reward's picture falls from the shelf into a shopping cart that rolls in at the bottom.
+function dropIntoCart(iconEl, reward) {
+  const cart = document.createElement("div");
+  cart.className = "cart";
+  cart.textContent = "🛒";
+  document.body.append(cart);
+  const from = iconEl.getBoundingClientRect();
+  const item = document.createElement("div");
+  item.className = "cart-drop";
+  setVisual(item, reward);
+  item.style.left = `${from.left + from.width / 2}px`;
+  item.style.top = `${from.top + from.height / 2}px`;
+  document.body.append(item);
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      const to = cart.getBoundingClientRect();
+      const dx = to.left + to.width * 0.55 - (from.left + from.width / 2);
+      const dy = to.top + to.height * 0.3 - (from.top + from.height / 2);
+      playSound("drop");
+      // A little hop up first, then a fall with gravity, spinning into the basket.
+      item.animate(
+        [
+          { transform: "translate(-50%, -50%) scale(1) rotate(0deg)" },
+          { transform: `translate(calc(-50% + ${dx * 0.25}px), calc(-50% - 50px)) scale(1.15) rotate(-20deg)`, offset: 0.25, easing: "ease-in" },
+          { transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) scale(0.6) rotate(200deg)` },
+        ],
+        { duration: 900, easing: "ease-out", fill: "forwards" },
+      ).finished.then(() => {
+        item.remove();
+        cart.classList.add("bump");
+        setTimeout(() => resolve(cart), 450);
+      });
+    }, 350); // let the cart roll in first
+  });
+}
+
+// A big, kid-friendly arithmetic card with three answer buttons. Resolves true after the right
+// answer is tapped (wrong ones shake and can be retried), false if it is closed with ✕.
+function mathQuiz({ item, title, a, b, op, labels, tip, checkout = false }) {
+  const answer = op === "+" ? a + b : a - b;
+  const wrong = [answer + 1, answer - 1, answer + 2, answer - 2, a].filter((n) => n !== answer && n >= Math.min(0, answer));
+  const choices = shuffle([answer, ...shuffle([...new Set(wrong)]).slice(0, 2)]);
+
+  const box = $("#mathQuiz");
+  box.classList.toggle("checkout", checkout);
+  $("#quizHead").textContent = checkout ? "🛒 结算台" : "⭐ 算一算";
+  setVisual($("#quizIcon"), item);
+  $("#quizTitle").textContent = title;
+  const cols = box.querySelectorAll(".eq-col");
+  [a, b, "?"].forEach((v, i) => {
+    cols[i].querySelector("small").textContent = labels[i];
+    cols[i].querySelector("b").textContent = v;
+  });
+  cols[2].classList.remove("solved");
+  $("#quizOp").textContent = op;
+  $("#quizTip").textContent = tip;
+  $("#quizTip").classList.remove("oops");
+  const btns = $("#quizChoices");
+  btns.innerHTML = "";
+  box.classList.remove("hidden");
+
+  return new Promise((resolve) => {
+    const finish = (ok) => {
+      box.classList.add("hidden");
+      $("#quizClose").onclick = null;
+      resolve(ok);
+    };
+    $("#quizClose").onclick = () => finish(false);
+    for (const n of choices) {
+      const btn = document.createElement("button");
+      btn.className = "quiz-choice";
+      btn.textContent = n;
+      btn.addEventListener("click", () => {
+        if (n !== answer) {
+          btn.classList.add("wrong");
+          btn.disabled = true;
+          playSound("nope");
+          $("#quizTip").textContent = "再想想哦～ 🤔";
+          $("#quizTip").classList.add("oops");
+          return;
+        }
+        btns.querySelectorAll("button").forEach((x) => (x.disabled = true));
+        btn.classList.add("right");
+        cols[2].querySelector("b").textContent = answer;
+        cols[2].classList.add("solved");
+        $("#quizTip").textContent = "答对啦！🎉";
+        $("#quizTip").classList.remove("oops");
+        playSound("ding");
+        setTimeout(() => finish(true), 800);
+      });
+      btns.append(btn);
+    }
+  });
+}
+
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
 }
 
 function earnedBadges() {
@@ -419,7 +596,7 @@ function renderTasks(done) {
       <span class="task-check">${n > 1 ? `×${n}` : "✓"}</span>`;
     setVisual(btn.querySelector(".task-icon"), task);
     btn.querySelector(".task-name").textContent = task.name;
-    btn.addEventListener("click", () => completeTask(task));
+    btn.addEventListener("click", () => startTask(task));
     li.append(btn);
     if (n) {
       const undo = document.createElement("button");
@@ -443,11 +620,16 @@ function renderRewards() {
     cabinet.innerHTML = `<p class="empty shelf-empty">货架还空着，请爸爸妈妈在「家长」里添加奖品～</p>`;
     return;
   }
+  const today = dateKey();
+  const boughtToday = (id) => state.redemptions.filter((b) => b.rewardId === id && recordDate(b) === today).length;
   for (let i = 0; i < state.rewards.length; i += PER_SHELF) {
     const shelf = document.createElement("div");
     shelf.className = "shelf";
     for (const r of state.rewards.slice(i, i + PER_SHELF)) {
       const can = state.balance >= r.cost;
+      const n = boughtToday(r.id);
+      const slot = document.createElement("div");
+      slot.className = "goods-slot";
       const goods = document.createElement("button");
       goods.className = "goods" + (can ? " can" : "");
       goods.innerHTML = `
@@ -460,7 +642,21 @@ function renderRewards() {
       setVisual(goods.querySelector(".goods-icon"), r);
       goods.querySelector(".tag-name").textContent = r.name;
       goods.addEventListener("click", () => redeem(r, goods));
-      shelf.append(goods);
+      slot.append(goods);
+      if (n) {
+        // Bought today: how many times, and undo the latest one (like tasks).
+        const count = document.createElement("span");
+        count.className = "goods-count";
+        count.textContent = `×${n}`;
+        count.title = `今天兑换了 ${n} 次`;
+        const undo = document.createElement("button");
+        undo.className = "goods-undo";
+        undo.textContent = "撤销";
+        undo.title = "撤销最近一次兑换";
+        undo.addEventListener("click", () => undoReward(r));
+        slot.append(count, undo);
+      }
+      shelf.append(slot);
     }
     cabinet.append(shelf);
   }
@@ -485,8 +681,19 @@ function setVisual(el, item) {
   }
 }
 
-// Records keep the task's name/emoji from when they were submitted; images come from the current task.
-const recordVisual = (rec) => ({ icon: rec.icon, image: state.tasks.find((t) => t.id === rec.taskId)?.image });
+// Records keep the task's (or reward's) name/emoji from when they were submitted; images come from
+// the current task or reward.
+const isPurchase = (rec) => "rewardId" in rec;
+const recordVisual = (rec) => ({
+  icon: rec.icon,
+  image: isPurchase(rec) ? state.rewards.find((r) => r.id === rec.rewardId)?.image : state.tasks.find((t) => t.id === rec.taskId)?.image,
+});
+// Task records and purchases together, newest first, as { rec, text, amount } rows.
+const recordRows = () =>
+  [
+    ...state.records.map((rec) => ({ rec, text: rec.name, amount: rec.points })),
+    ...state.redemptions.map((rec) => ({ rec, text: `兑换：${rec.name}`, amount: -rec.cost })),
+  ].sort((a, b) => b.rec.t - a.rec.t);
 const byText = (by) => (by ? `${by.role} ${by.username}` : "");
 const timeText = (t, opts) => new Date(t).toLocaleString("zh-CN", { hour: "2-digit", minute: "2-digit", ...opts });
 
@@ -494,7 +701,7 @@ function renderHistory() {
   const ul = $("#historyList");
   ul.innerHTML = "";
   const entries = [
-    ...state.records.map((r) => ({ ...recordVisual(r), t: r.t, text: r.name, amount: r.points, by: r.by })),
+    ...recordRows().map(({ rec, text, amount }) => ({ ...recordVisual(rec), t: rec.t, text, amount, by: rec.by })),
     ...state.history,
   ].sort((a, b) => b.t - a.t);
   if (!entries.length) {
@@ -549,6 +756,8 @@ function renderParent() {
 
   renderEditList($("#editTasks"), state.tasks, "points", "颗星", (t) => openItemEditor("task", t));
   renderEditList($("#editRewards"), state.rewards, "cost", "颗星", (r) => openItemEditor("reward", r));
+  renderSuggestions("task", $("#suggestTasks"));
+  renderSuggestions("reward", $("#suggestRewards"));
   renderRecords();
 }
 
@@ -556,9 +765,11 @@ let recordLimit = 20;
 function renderRecords() {
   const ul = $("#recordList");
   ul.innerHTML = "";
-  if (!state.records.length) ul.innerHTML = `<li class="empty">还没有任务记录</li>`;
+  const rows = recordRows();
+  if (!rows.length) ul.innerHTML = `<li class="empty">还没有记录</li>`;
   let lastDay = "";
-  for (const rec of state.records.slice(0, recordLimit)) {
+  for (const { rec, text, amount } of rows.slice(0, recordLimit)) {
+    const buy = isPurchase(rec);
     const day = recordDate(rec);
     if (day !== lastDay) {
       lastDay = day;
@@ -568,28 +779,35 @@ function renderRecords() {
       ul.append(h);
     }
     const li = document.createElement("li");
-    li.className = "rec";
+    li.className = "rec" + (buy ? " buy" : "");
     li.innerHTML = `
       <span class="e-icon"></span>
       <span class="e-name"><span></span><small></small></span>
-      <span class="e-pts">+${rec.points}⭐</span>
+      <span class="e-pts">${amount > 0 ? "+" : ""}${amount}⭐</span>
       <button class="btn small" data-act="edit">修改</button>
       <button class="btn small danger" data-act="del">删除</button>`;
     setVisual(li.querySelector(".e-icon"), recordVisual(rec));
-    li.querySelector(".e-name span").textContent = rec.name;
+    li.querySelector(".e-name span").textContent = text;
     li.querySelector(".e-name small").textContent = `${timeText(rec.t)} · ${byText(rec.by) || "提交人未知"}`;
     li.querySelector('[data-act="edit"]').addEventListener("click", () => openRecordEditor(rec));
     li.querySelector('[data-act="del"]').addEventListener("click", () =>
-      confirmModal("🗑️", "删除这条任务记录？", `「${rec.name}」的 ${rec.points} 颗星会被收回`, "删除", () => {
-        deleteRecord(rec);
-        save();
-        render();
-        toast("记录已删除，星星已退回");
-      }),
+      buy
+        ? confirmModal("🗑️", "删除这条兑换记录？", `「${rec.name}」花掉的 ${rec.cost} 颗星会退回`, "删除", () => {
+            deleteRedemption(rec);
+            save();
+            render();
+            toast("记录已删除，星星已退回");
+          })
+        : confirmModal("🗑️", "删除这条任务记录？", `「${rec.name}」的 ${rec.points} 颗星会被收回`, "删除", () => {
+            deleteRecord(rec);
+            save();
+            render();
+            toast("记录已删除，星星已退回");
+          }),
     );
     ul.append(li);
   }
-  $("#moreRecords").classList.toggle("hidden", state.records.length <= recordLimit);
+  $("#moreRecords").classList.toggle("hidden", rows.length <= recordLimit);
 }
 
 function renderEditList(ul, items, numKey, unit, onEdit) {
@@ -722,6 +940,50 @@ const EDIT_KINDS = {
   task: { list: () => state.tasks, numKey: "points", max: 99, numLabel: "星星", word: "任务", icon: "🌟", num: 2, prefix: "t" },
   reward: { list: () => state.rewards, numKey: "cost", max: 999, numLabel: "价格", word: "奖品", icon: "🎁", num: 20, prefix: "r" },
 };
+// Ideas for a 5-year-old in kindergarten, listed under the task and reward lists. Tapping one opens
+// the editor filled in so parents can adjust it before adding; ones already in the list are hidden.
+// [icon, name, stars or price, optional animation when the name alone would pick the wrong one]
+const SUGGESTIONS = {
+  task: [
+    ["生活自理", [["🧦", "自己穿袜子", 1], ["👟", "自己穿鞋", 1], ["🧼", "自己洗脸", 1], ["💇", "自己梳头", 1], ["🎒", "整理书包", 2, "tidy"], ["👚", "叠衣服", 2], ["🛁", "自己洗澡", 2]]],
+    ["家务小帮手", [["🥢", "帮忙摆碗筷", 1], ["🧽", "擦桌子", 1], ["🗑️", "倒垃圾", 1], ["🪴", "给花浇水", 1]]],
+    ["学习兴趣", [["🔤", "认字10个", 2], ["🔢", "数数到100", 2], ["📜", "背一首古诗", 3], ["🔠", "学3个英语单词", 2], ["🎨", "画一幅画", 2], ["🎵", "唱一首儿歌", 1], ["🎶", "弹古筝", 3], ["⚫️", "下围棋", 3], ["🎲", "玩桌游", 2]]],
+    ["运动", [["🏀", "拍球20下", 2], ["🏃", "跑步10分钟", 2], ["🛴", "骑滑板车", 2], ["🤸", "做早操", 1]]],
+    ["好习惯", [["😴", "午睡", 2], ["🍎", "吃一份水果", 1], ["🥛", "喝牛奶", 1], ["🥦", "吃饭不挑食", 2], ["🙏", "说请和谢谢", 1], ["👋", "主动打招呼", 1], ["🤝", "和小朋友分享", 2]]],
+  ],
+  reward: [
+    ["好吃的", [["🍬", "一颗糖果", 3], ["🍮", "一个果冻", 3], ["🥛", "一盒酸奶", 5], ["🎂", "一块小蛋糕", 10], ["🍟", "吃一次麦当劳", 30]]],
+    ["小特权", [["📖", "多讲一个故事", 5], ["🛁", "泡泡浴", 8], ["🌙", "晚睡15分钟", 10], ["🍽️", "选今天的晚餐", 10], ["🎲", "和爸爸妈妈玩桌游", 10], ["👑", "当一天小主人", 50]]],
+    ["出去玩", [["🫧", "吹泡泡", 8], ["🪁", "放风筝", 15], ["📚", "去图书馆", 15], ["🎠", "去游乐场", 30], ["🎬", "看一场电影", 40], ["🦁", "去动物园", 60], ["🐬", "去海洋馆", 80]]],
+    ["小礼物", [["⭐", "一张贴纸", 2], ["🎈", "一个气球", 5], ["🖍️", "一盒新蜡笔", 20], ["🎁", "一个盲盒", 30], ["🧱", "一盒积木", 50]]],
+  ],
+};
+
+function renderSuggestions(kind, box) {
+  const k = EDIT_KINDS[kind];
+  const have = new Set(k.list().map((x) => x.name));
+  box.innerHTML = "";
+  for (const [group, items] of SUGGESTIONS[kind]) {
+    const left = items.filter(([, name]) => !have.has(name));
+    if (!left.length) continue;
+    const title = document.createElement("div");
+    title.className = "suggest-group";
+    title.textContent = group;
+    const row = document.createElement("div");
+    row.className = "suggest-row";
+    for (const [icon, name, num, anim] of left) {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "suggest-chip";
+      chip.textContent = `＋ ${icon} ${name} · ${num}⭐`;
+      chip.addEventListener("click", () => openItemEditor(kind, { icon, name, [k.numKey]: num, anim }));
+      row.append(chip);
+    }
+    box.append(title, row);
+  }
+  if (!box.children.length) box.innerHTML = `<p class="hint">推荐的都已经添加啦 🎉</p>`;
+}
+
 let editKind = "task";
 let editingItemId = null; // null while adding a new item
 let editImage = null;
@@ -749,7 +1011,7 @@ function openItemEditor(kind, item = null) {
   f.querySelector(".task-only").classList.toggle("hidden", kind !== "task");
   f.anim.value = item?.anim || "";
   updateAnimOptions();
-  $("#itemEditTitle").textContent = `${item ? "编辑" : "添加"}${k.word}`;
+  $("#itemEditTitle").textContent = `${editingItemId ? "编辑" : "添加"}${k.word}`; // suggestions arrive as unsaved items
   updateItemPreview();
   openEditor("#itemEditor");
 }
@@ -796,11 +1058,15 @@ function openRecordEditor(rec) {
   const f = $("#recordEditForm");
   const d = new Date(rec.t);
   const p = (n) => String(n).padStart(2, "0");
+  const buy = isPurchase(rec);
   editingRecordId = rec.id;
   f.when.value = `${dateKey(d)}T${p(d.getHours())}:${p(d.getMinutes())}`;
   f.when.max = `${dateKey()}T23:59`;
-  f.points.value = rec.points;
-  $("#recordEditInfo").textContent = `${rec.name} · ${byText(rec.by) || "提交人未知"}`;
+  f.points.value = buy ? rec.cost : rec.points;
+  f.points.max = buy ? 999 : 99;
+  $("#recordEditTitle").textContent = buy ? "修改兑换记录" : "修改任务记录";
+  $("#recordPointsLabel").textContent = buy ? "花费星星" : "星星";
+  $("#recordEditInfo").textContent = `${buy ? "兑换：" : ""}${rec.name} · ${byText(rec.by) || "提交人未知"}`;
   openEditor("#recordEditor");
 }
 
@@ -869,9 +1135,11 @@ function bindEditors() {
     if (!Number.isFinite(t)) return;
     if (t > Date.now() + 60e3) return toast("不能选将来的时间");
     const rec = state.records.find((r) => r.id === editingRecordId);
+    const buy = state.redemptions.find((b) => b.id === editingRecordId);
     closeEditors();
-    if (!rec) return toast("这条记录已经被家人删除了");
-    updateRecord(rec, { t, points: clampInt(rf.points.value, 0, 99) });
+    if (rec) updateRecord(rec, { t, points: clampInt(rf.points.value, 0, 99) });
+    else if (buy) updateRedemption(buy, { t, cost: clampInt(rf.points.value, 0, 999) });
+    else return toast("这条记录已经被家人删除了");
     save();
     render();
     toast("记录已修改 ✅");
@@ -1236,22 +1504,58 @@ function redEnvelope(points, cheer) {
 const THEMES = {
   brush: { label: "刷牙泡泡", words: ["刷牙", "漱口"], motion: "wiggle", praise: ["牙齿亮晶晶！", "刷得真干净！", "泡泡飞上天啦！"],
     play: ({ cx, cy, size }) => spawnBubbles(cx, cy + size * 0.05) },
-  kindergarten: { label: "幼儿园一起玩", words: ["幼儿园", "上学", "学校", "托班"], motion: "dance", praise: ["和小朋友玩得真开心！", "幼儿园真好玩！", "交到好朋友啦！"],
+  wash: { label: "洗手", words: ["洗手", "洗脸"], motion: "shake", praise: ["小手洗得香喷喷！", "细菌都跑光啦！", "洗手小卫士！"],
+    play: ({ cx, cy, size }) => { spawnBubbles(cx, cy + size * 0.2, 22); spawnFountain(cx, cy, ["💧", "💦", "🧼", "✨"], 14); } },
+  bath: { label: "洗澡洗头", words: ["洗澡", "洗头", "泡澡", "沐浴"], motion: "wiggle", praise: ["洗得香香的！", "泡泡澡真好玩！", "干干净净小宝贝！"],
+    play: ({ cx, cy, size }) => { spawnBubbles(cx, cy - size * 0.1, 36); spawnFountain(cx, cy, ["🦆", "🫧", "💧", "🧴"], 10); } },
+  potty: { label: "拉臭臭", words: ["大便", "拉臭臭", "便便", "上厕所", "如厕", "小便", "尿尿"], motion: "pop", praise: ["拉臭臭真棒！", "肚子舒服啦！", "自己上厕所真能干！"],
+    play: ({ cx, cy }) => { spawnFountain(cx, cy, ["💩", "🧻", "👍", "⭐", "✨", "🌟"], 24); spawnTwinkles(["✨", "🌟"], 16); } },
+  kindergarten: { label: "幼儿园一起玩", words: ["幼儿园", "上学", "学校", "托班", "分享", "打招呼", "谢谢", "礼貌"], motion: "dance", praise: ["和小朋友玩得真开心！", "幼儿园真好玩！", "交到好朋友啦！"],
     play: ({ cx, cy }) => { spawnFloaters(cx, cy, ["🎈", "🎈", "🎈", "🪁", "🌈", "💖", "⭐"]); spawnTwinkles(["✨", "💫"], 14); } },
+  hike: { label: "爬山", words: ["爬山", "登山", "徒步", "远足"], motion: "tilt", praise: ["爬到山顶啦！", "小小登山家！", "腿脚真有劲！"],
+    play: ({ cx, cy }) => { spawnFountain(cx, cy, ["⛰️", "🌲", "🚩", "🦅", "⭐", "🌟"], 24); spawnTwinkles(["☀️", "✨"], 10); } },
+  park: { label: "公园放风筝", words: ["公园", "风筝", "郊游", "野餐"], motion: "dance", praise: ["公园真好玩！", "风筝飞得高高的！", "玩得真开心！"],
+    play: ({ cx, cy }) => { spawnFloaters(cx, cy, ["🪁", "🪁", "🎈", "🦋", "🌸", "☁️"]); spawnTwinkles(["🌼", "✨"], 12); } },
+  outdoor: { label: "户外玩耍", words: ["户外", "晒太阳", "散步", "滑梯", "浇水", "浇花"], motion: "dance", praise: ["晒晒太阳长得高！", "户外真好玩！", "大自然真美！"],
+    play: ({ cx, cy }) => { spawnFloaters(cx, cy, ["🦋", "🌸", "🍃", "🐦", "🌼", "🦋"]); spawnTwinkles(["☀️", "✨", "🌈"], 12); } },
   sleep: { label: "睡觉", words: ["睡"], motion: "breathe", praise: ["早睡早起身体好！", "做个甜甜的梦！"],
     play: ({ cx, cy, size }) => { spawnZzz(cx + size * 0.25, cy - size * 0.25); spawnTwinkles(["⭐", "✨", "🌟"], 30); } },
+  class: { label: "上课举手", words: ["上课", "课堂", "听课", "兴趣班"], motion: "dance", praise: ["上课真认真！", "积极举手真勇敢！", "又学会新本领啦！"],
+    play: ({ cx, cy }) => { spawnFountain(cx, cy, ["🙋", "✋", "💡", "👍", "⭐", "📚", "🔔"], 24); spawnTwinkles(["💡", "✨"], 14); } },
+  math: { label: "学数学", words: ["数学", "算术", "口算", "数数", "加法", "减法"], motion: "pop", praise: ["数学小天才！", "算得又快又对！", "数字真好玩！"],
+    play: ({ cx, cy }) => spawnFountain(cx, cy, [["1", "#e53935"], ["2", "#f9a825"], ["3", "#1e88e5"], ["5", "#fb8c00"], ["10", "#8e24aa"], ["+", "#43a047"], ["=", "#e53935"], "🧮", "⭐"], 28) },
+  art: { label: "画画手工", words: ["画", "涂色", "手工", "剪纸", "折纸", "彩泥"], motion: "tilt", praise: ["小画家真棒！", "画得真漂亮！", "颜色好丰富！"],
+    play: ({ cx, cy }) => spawnFountain(cx, cy, ["🎨", "🖍️", "🖌️", "🌈", "☀️", "⭐"], 24) },
+  guzheng: { label: "弹古筝", words: ["古筝", "琵琶", "钢琴", "弹琴", "练琴", "乐器"], motion: "nod", praise: ["琴声真好听！", "小小演奏家！", "弹得真棒！"],
+    play: ({ cx, cy }) => { spawnFloaters(cx, cy, ["🎵", "🎶", "🎼", "🌸", "🎵"]); spawnTwinkles(["✨"], 12); } },
+  music: { label: "唱歌跳舞", words: ["唱歌", "儿歌", "跳舞", "音乐", "打鼓"], motion: "dance", praise: ["唱得真好听！", "小歌星来啦！", "跳得真好看！"],
+    play: ({ cx, cy }) => { spawnFloaters(cx, cy, ["🎵", "🎶", "🎤", "💖", "⭐"]); spawnTwinkles(["✨", "🎵"], 12); } },
+  // Before chess: "飞行棋" and "跳棋" are board games.
+  boardgame: { label: "玩桌游", words: ["桌游", "飞行棋", "大富翁", "跳棋"], motion: "bounce", praise: ["玩得真开心！", "掷出好点数！", "桌游小高手！"],
+    play: ({ cx, cy }) => spawnFountain(cx, cy, ["🎲", "🎲", "♟️", "🃏", "⭐", "🏆"], 24) },
+  chess: { label: "下棋", words: ["围棋", "象棋", "五子棋", "下棋"], motion: "nod", praise: ["小棋手真厉害！", "这步棋下得妙！", "动脑筋真棒！"],
+    play: ({ cx, cy }) => { spawnFountain(cx, cy, ["⚫", "⚪", "⚫", "⚪", "🧠", "🏅", "⭐"], 24); spawnTwinkles(["💡", "✨"], 10); } },
   homework: { label: "写作业", words: ["作业", "写字", "练字", "功课", "数学", "英语", "算术", "学", "写"], motion: "nod", praise: ["作业完成啦！", "认真学习的好孩子！"],
     play: ({ cx, cy }) => spawnFountain(cx, cy, ["💯", "✏️", "⭐", "📝", ["A+", "#e53935"], ["100", "#e53935"]]) },
-  read: { label: "读书", words: ["读", "阅读", "绘本", "书", "故事"], motion: "tilt", praise: ["读书真棒！", "又学到新知识啦！", "故事真好听！"],
+  read: { label: "读书", words: ["读", "阅读", "绘本", "书", "故事", "认字", "识字", "古诗", "背诗"], motion: "tilt", praise: ["读书真棒！", "又学到新知识啦！", "故事真好听！"],
     play: ({ cx, cy, size }) => spawnFountain(cx, cy + size * 0.2, ["⭐", "✨", "🦋", "🌈", "🦕", "🏰", ["A", "#54a0ff"], ["B", "#ff6b9d"], ["乐", "#2ecc71"]]) },
-  sport: { label: "运动", words: ["跳绳", "运动", "跑", "球", "游泳", "锻炼", "骑车", "跳"], motion: "bounce", praise: ["身体棒棒！", "运动小健将！"],
+  bike: { label: "骑自行车", words: ["自行车", "单车", "骑车", "滑板车", "平衡车"], motion: "ride", praise: ["骑得真稳！", "小车手出发啦！", "叮铃铃，真厉害！"],
+    play: ({ cx, cy }) => spawnFountain(cx, cy, ["🚲", "💨", "🔔", "⭐", "🌟", "💪"], 24) },
+  foosball: { label: "桌面足球", words: ["桌面足球", "桌上足球", "足球", "踢球"], motion: "shake", praise: ["射门成功！", "进球啦！", "足球小明星！"],
+    play: ({ cx, cy }) => { fireworks(2, { spread: 200, sound: false }); spawnFountain(cx, cy, ["⚽", "⚽", "🥅", "🏆", "⭐", ["GOAL!", "#e53935"]], 24); } },
+  sport: { label: "运动", words: ["跳绳", "运动", "跑", "球", "游泳", "锻炼", "骑车", "跳", "操"], motion: "bounce", praise: ["身体棒棒！", "运动小健将！"],
     play: ({ cx, cy }) => spawnFountain(cx, cy, ["💪", "⚡", "❤️", "⭐", "💦", "🏅"], 26) },
-  tidy: { label: "收拾整理", words: ["收拾", "整理", "打扫", "玩具", "叠", "扫"], motion: "shake", praise: ["房间亮堂堂！", "收拾小能手！"],
+  tidy: { label: "收拾整理", words: ["收拾", "整理", "打扫", "玩具", "叠", "扫", "碗筷", "擦", "垃圾", "家务"], motion: "shake", praise: ["房间亮堂堂！", "收拾小能手！"],
     play: ({ cx, cy }) => { spawnTwinkles(["✨", "🌟", "💫", "⭐"], 34); spawnFountain(cx, cy, ["🧸", "🧩", "⚽", "🚗"], 10); } },
-  dress: { label: "穿衣服", words: ["穿衣", "衣服", "穿"], motion: "pop", praise: ["自己穿衣真能干！", "穿得真整齐！"],
+  dress: { label: "穿衣服", words: ["穿衣", "衣服", "穿", "梳头"], motion: "pop", praise: ["自己穿衣真能干！", "穿得真整齐！"],
     play: ({ cx, cy }) => spawnFountain(cx, cy, ["👕", "👖", "🧦", "🧢", "👟", "🧤", "✨"]) },
+  drink: { label: "喝水", words: ["喝水", "饮水", "喝牛奶", "喝奶"], motion: "nod", praise: ["咕咚咕咚，真解渴！", "多喝水身体棒！", "喝水小达人！"],
+    play: ({ cx, cy, size }) => { spawnFountain(cx, cy, ["💧", "💧", "💦", "💙", "🫧", "✨"], 24); spawnBubbles(cx, cy + size * 0.15, 12); } },
   eat: { label: "吃饭", words: ["吃", "饭", "餐", "喝"], motion: "nod", praise: ["吃得香香的！", "光盘小能手！", "长高高啦！"],
     play: ({ cx, cy }) => spawnFountain(cx, cy, ["🍚", "🥦", "🌽", "🍗", "🥕", "🍎", "🥚", "🍅", "🥛", "💧"]) },
+  // Last: words like "难" are generic, so a more specific theme above wins.
+  challenge: { label: "勇敢挑战", words: ["难", "挑战", "勇敢", "坚持"], motion: "bounce", praise: ["你真勇敢！", "困难被你打败啦！", "挑战成功！"],
+    play: ({ cx, cy }) => { fireworks(3, { spread: 220, sound: false }); spawnFountain(cx, cy, ["🏆", "🏅", "💪", "🚩", "⭐", "🌟"], 24); } },
 };
 
 // A task's animation: chosen in the editor (task.anim), otherwise matched from its name.
@@ -1396,6 +1700,117 @@ const SOUNDS = {
       tone(1400, t + 0.95 + i * 0.12, 0.08, { type: "sine", vol: 0.08, slideTo: 1900 });
       tone(1900, t + 1.01 + i * 0.12, 0.06, { type: "sine", vol: 0.06, slideTo: 1500 });
     }
+  },
+  // School bell "叮铃铃", then a cheerful two-note "到！".
+  class(t) {
+    for (let i = 0; i < 14; i++) tone(i % 2 ? 2093 : 2637, t + i * 0.04, 0.06, { type: "square", vol: 0.05 });
+    tone(784, t + 0.7, 0.2, { vol: 0.16 });
+    tone(1047, t + 0.86, 0.4, { vol: 0.16 });
+  },
+  // Counting up "1, 2, 3" on a xylophone, then a bright "ding!" for the right answer.
+  math(t) {
+    [523, 659, 784].forEach((f, i) => tone(f, t + i * 0.16, 0.18, { vol: 0.15 }));
+    tone(1047, t + 0.52, 0.45, { type: "sine", vol: 0.14 });
+    tone(1568, t + 0.6, 0.5, { type: "sine", vol: 0.08 });
+  },
+  // "咕咚咕咚": three gulps, then little water drips.
+  drink(t) {
+    for (let i = 0; i < 3; i++) {
+      tone(520, t + i * 0.24, 0.15, { type: "sine", vol: 0.22, slideTo: 170 });
+      noise(t + i * 0.24 + 0.03, 0.05, { vol: 0.05, filter: "lowpass", freq: 600 });
+    }
+    [1600, 2200, 1900].forEach((f, i) => tone(f, t + 0.8 + i * 0.13, 0.1, { type: "sine", vol: 0.1, slideTo: f * 1.6 }));
+  },
+  // Victory fanfare: "ta-ta-ta-taaa!".
+  challenge(t) {
+    [[523, 0, 0.12], [523, 0.14, 0.12], [523, 0.28, 0.12], [698, 0.42, 0.55]].forEach(([f, d, len]) => {
+      tone(f, t + d, len, { type: "square", vol: 0.07 });
+      tone(f * 2, t + d, len, { vol: 0.08 });
+    });
+    [880, 1047].forEach((f, i) => tone(f, t + 1 + i * 0.16, 0.5, { vol: 0.12 }));
+  },
+  // Running tap water, then a squeaky-clean sparkle.
+  wash(t) {
+    noise(t, 1, { vol: 0.12, filter: "bandpass", freq: 1500, q: 0.7, attack: 0.1 });
+    [1568, 1760, 2093, 2637].forEach((f, i) => tone(f, t + 1 + i * 0.06, 0.22, { type: "sine", vol: 0.1 }));
+  },
+  // A splash, then the rubber duck squeaks twice.
+  bath(t) {
+    noise(t, 0.45, { vol: 0.3, filter: "lowpass", freq: 2500, freqTo: 400 });
+    [0.5, 0.75].forEach((d) => tone(900, t + d, 0.14, { type: "square", vol: 0.06, slideTo: 1300 }));
+  },
+  // "哗啦啦" flush, then a happy "叮咚叮".
+  potty(t) {
+    noise(t, 1.3, { vol: 0.25, filter: "lowpass", freq: 4000, freqTo: 250, attack: 0.15 });
+    [784, 988, 1175].forEach((f, i) => tone(f, t + 1.15 + i * 0.13, 0.3, { vol: 0.14 }));
+  },
+  // Birds chirping over a light melody.
+  outdoor(t) {
+    for (let i = 0; i < 6; i++) {
+      const f = rand(2600, 3400);
+      tone(f, t + i * 0.11 + (i > 2 ? 0.3 : 0), 0.07, { type: "sine", vol: 0.07, slideTo: f * 1.3 });
+    }
+    [659, 784, 880, 1047].forEach((f, i) => tone(f, t + 0.2 + i * 0.18, 0.3, { vol: 0.1 }));
+  },
+  // Footsteps crunching uphill, then a "嘿～" that echoes back from the mountains.
+  hike(t) {
+    for (let i = 0; i < 4; i++) noise(t + i * 0.18, 0.08, { vol: 0.12, filter: "lowpass", freq: 900 });
+    [0, 0.35, 0.7].forEach((d, i) => tone(523, t + 0.8 + d, 0.3, { vol: 0.15 / (i + 1), slideTo: 784 }));
+  },
+  // Wind whooshing as the kite rises, then a cheerful little tune.
+  park(t) {
+    noise(t, 1.2, { vol: 0.1, filter: "bandpass", freq: 400, freqTo: 1600, q: 1.2, attack: 0.4 });
+    [784, 880, 988, 1175, 1568].forEach((f, i) => tone(f, t + 0.4 + i * 0.12, 0.25, { vol: 0.11 }));
+  },
+  // Two brush swishes, then a colorful "ta-da" glissando.
+  art(t) {
+    [0, 0.25].forEach((d) => noise(t + d, 0.22, { vol: 0.1, filter: "bandpass", freq: 1200, freqTo: 3500, q: 2, attack: 0.08 }));
+    [523, 659, 784, 988, 1175, 1568].forEach((f, i) => tone(f, t + 0.55 + i * 0.06, 0.3, { type: "sine", vol: 0.1 }));
+  },
+  // A guzheng glissando sweeping up the pentatonic scale, then a plucked phrase.
+  guzheng(t) {
+    [587, 659, 740, 880, 988, 1175, 1319, 1480].forEach((f, i) => tone(f, t + i * 0.035, 0.6, { vol: 0.07 }));
+    [880, 740, 988, 880].forEach((f, i) => tone(f, t + 0.5 + i * 0.2, 0.5, { vol: 0.13 }));
+  },
+  // "一闪一闪亮晶晶" on a music box.
+  music(t) {
+    [523, 523, 784, 784, 880, 880, 784].forEach((f, i) => tone(f, t + i * 0.17, i === 6 ? 0.45 : 0.2, { type: "sine", vol: 0.14 }));
+  },
+  // Dice rattling and rolling, then a win jingle.
+  boardgame(t) {
+    for (let i = 0; i < 7; i++) noise(t + i * 0.06 + rand(0, 0.03), 0.03, { vol: 0.16, filter: "highpass", freq: 2500 });
+    [659, 784, 1047].forEach((f, i) => tone(f, t + 0.6 + i * 0.12, 0.3, { vol: 0.13 }));
+  },
+  // Go stones clacking on the board, then a bright "aha!".
+  chess(t) {
+    [0, 0.35, 0.6].forEach((d) => {
+      noise(t + d, 0.03, { vol: 0.25, filter: "highpass", freq: 3000 });
+      tone(1250, t + d, 0.06, { type: "sine", vol: 0.12 });
+    });
+    tone(1047, t + 0.95, 0.25, { type: "sine", vol: 0.12 });
+    tone(1568, t + 1.08, 0.45, { type: "sine", vol: 0.12 });
+  },
+  // Bicycle bell "叮铃 叮铃", with a whoosh.
+  bike(t) {
+    [0, 0.3].forEach((d) => {
+      tone(2200, t + d, 0.5, { type: "sine", vol: 0.12 });
+      tone(3100, t + d, 0.4, { type: "sine", vol: 0.06 });
+    });
+    noise(t + 0.6, 0.5, { vol: 0.08, filter: "bandpass", freq: 600, freqTo: 2400, q: 1.5, attack: 0.2 });
+  },
+  // Clack-clack of the rods, the ball hits the goal, then the crowd cheers.
+  foosball(t) {
+    [0, 0.12, 0.3].forEach((d) => noise(t + d, 0.04, { vol: 0.2, filter: "highpass", freq: 1800 }));
+    tone(180, t + 0.45, 0.2, { type: "sine", vol: 0.3, slideTo: 80 });
+    noise(t + 0.55, 0.9, { vol: 0.15, filter: "bandpass", freq: 1000, q: 0.5, attack: 0.15 });
+    [523, 659, 784, 1047].forEach((f, i) => tone(f, t + 0.6 + i * 0.1, 0.3, { vol: 0.12 }));
+  },
+  // The reward falls (whistle down), lands in the cart (thump), and the cart rings.
+  drop(t) {
+    tone(1400, t, 0.75, { type: "sine", vol: 0.1, slideTo: 300 });
+    tone(150, t + 0.9, 0.18, { type: "sine", vol: 0.3, slideTo: 70 });
+    noise(t + 0.9, 0.12, { vol: 0.15, filter: "lowpass", freq: 900 });
+    tone(1319, t + 1.05, 0.25, { type: "sine", vol: 0.12 });
   },
   // Soft lullaby with a twinkle.
   sleep(t) {

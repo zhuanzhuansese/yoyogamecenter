@@ -121,11 +121,15 @@
             <h3>📋 每日任务</h3>
             <ul class="edit-list" id="editTasks"></ul>
             <button class="btn primary wide" id="addTaskBtn">＋ 添加任务</button>
+            <details class="suggest">
+              <summary>💡 推荐任务（适合 5 岁小朋友，点一下就能添加）</summary>
+              <div id="suggestTasks"></div>
+            </details>
           </div>
 
           <div class="card">
-            <h3>🗂️ 任务记录</h3>
-            <p class="hint">每次完成任务都会记一条：谁提交的、什么时间。误加的记录可以修改或删除，星星会自动退回。</p>
+            <h3>🗂️ 任务和兑换记录</h3>
+            <p class="hint">每次完成任务、兑换奖品都会记一条：谁提交的、什么时间。误加的记录可以修改或删除，星星会自动退回。</p>
             <ul class="record-list" id="recordList"></ul>
             <button class="btn wide hidden" id="moreRecords">显示更多</button>
           </div>
@@ -134,6 +138,10 @@
             <h3>🎁 奖励清单</h3>
             <ul class="edit-list" id="editRewards"></ul>
             <button class="btn primary wide" id="addRewardBtn">＋ 添加奖品</button>
+            <details class="suggest">
+              <summary>💡 推荐奖品（点一下就能添加）</summary>
+              <div id="suggestRewards"></div>
+            </details>
           </div>
 
           <div class="card">
@@ -186,6 +194,28 @@
     </div>
   </div>
 
+  <!-- Work out the new star total before a task counts (+) or a purchase goes through (−). -->
+  <div class="modal hidden" id="mathQuiz">
+    <div class="modal-card quiz-card">
+      <button class="quiz-close" id="quizClose" aria-label="关闭">✕</button>
+      <div class="quiz-head" id="quizHead"></div>
+      <div class="quiz-item">
+        <span class="quiz-icon" id="quizIcon"></span>
+        <span class="quiz-cart-basket">🛒</span>
+      </div>
+      <h3 id="quizTitle"></h3>
+      <div class="quiz-eq">
+        <div class="eq-col"><small></small><b></b></div>
+        <span class="eq-op" id="quizOp"></span>
+        <div class="eq-col"><small></small><b></b></div>
+        <span class="eq-op">=</span>
+        <div class="eq-col"><small></small><b></b></div>
+      </div>
+      <p class="quiz-tip" id="quizTip"></p>
+      <div class="quiz-choices" id="quizChoices"></div>
+    </div>
+  </div>
+
   <div class="modal hidden" id="itemEditor">
     <form class="modal-card editor" id="itemEditForm">
       <h3 id="itemEditTitle">编辑任务</h3>
@@ -224,10 +254,10 @@
 
   <div class="modal hidden" id="recordEditor">
     <form class="modal-card editor" id="recordEditForm">
-      <h3>修改任务记录</h3>
+      <h3 id="recordEditTitle">修改任务记录</h3>
       <p class="hint" id="recordEditInfo"></p>
       <label class="field">时间 <input name="when" type="datetime-local" required /></label>
-      <label class="field">星星 <input name="points" type="number" min="0" max="99" required /></label>
+      <label class="field"><span id="recordPointsLabel">星星</span> <input name="points" type="number" min="0" max="99" required /></label>
       <div class="row-btns">
         <button type="button" class="btn" data-close>取消</button>
         <button type="submit" class="btn primary">保存</button>
