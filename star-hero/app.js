@@ -1510,7 +1510,7 @@ const THEMES = {
     play: ({ cx, cy, size }) => { spawnBubbles(cx, cy - size * 0.1, 36); spawnFountain(cx, cy, ["🦆", "🫧", "💧", "🧴"], 10); } },
   potty: { label: "拉臭臭", words: ["大便", "拉臭臭", "便便", "上厕所", "如厕", "小便", "尿尿"], motion: "pop", praise: ["拉臭臭真棒！", "肚子舒服啦！", "自己上厕所真能干！"],
     play: ({ cx, cy }) => { spawnFountain(cx, cy, ["💩", "🧻", "👍", "⭐", "✨", "🌟"], 24); spawnTwinkles(["✨", "🌟"], 16); } },
-  chat: { label: "聊天", words: ["聊天", "谈心", "说说", "讲讲"], motion: "nod", praise: ["聊得真开心！", "你讲得真好！", "爸爸妈妈最爱听你说话！"],
+  chat: { label: "聊天", words: ["聊天", "谈心", "说说", "讲讲"], motion: "nod", praise: ["和爸爸妈妈聊得真开心！", "你讲得真好！", "爸爸妈妈最爱听你说话！"],
     play: ({ cx, cy }) => { spawnFloaters(cx, cy, ["💬", "🗨️", "💭", "💖", "😊", "💬"]); spawnTwinkles(["✨", "💕"], 12); } },
   kindergarten: { label: "幼儿园一起玩", words: ["幼儿园", "上学", "学校", "托班", "分享", "打招呼", "谢谢", "礼貌"], motion: "dance", praise: ["和小朋友玩得真开心！", "幼儿园真好玩！", "交到好朋友啦！"],
     play: ({ cx, cy }) => { spawnFloaters(cx, cy, ["🎈", "🎈", "🎈", "🪁", "🌈", "💖", "⭐"]); spawnTwinkles(["✨", "💫"], 14); } },
@@ -1560,6 +1560,10 @@ const THEMES = {
     play: ({ cx, cy }) => { fireworks(3, { spread: 220, sound: false }); spawnFountain(cx, cy, ["🏆", "🏅", "💪", "🚩", "⭐", "🌟"], 24); } },
 };
 
+// Illustrations are cached for a day; bump this when one is redrawn so devices fetch the new picture.
+const ANIM_VERSION = 2;
+const animSrc = (key) => `assets/anim/${key}.webp?v=${ANIM_VERSION}`;
+
 // A task's animation: chosen in the editor (task.anim), otherwise matched from its name.
 // "envelope" or no match plays the red envelope.
 function themeFor(task) {
@@ -1576,7 +1580,7 @@ function celebrate(task) {
   overlay.className = `scene-overlay theme-${key}`;
   overlay.innerHTML = `
     <div class="scene">
-      <img class="scene-kid m-${theme.motion}" alt="" src="assets/anim/${key}.webp" />
+      <img class="scene-kid m-${theme.motion}" alt="" src="${animSrc(key)}" />
       <div class="scene-label"><small></small><b>+${task.points}<span>⭐</span></b></div>
     </div>`;
   overlay.querySelector(".scene-label small").textContent = pick(theme.praise);
@@ -1593,7 +1597,7 @@ function celebrate(task) {
 
 // Warm the image cache so the first celebration shows its picture immediately.
 function preloadThemes() {
-  for (const key of Object.keys(THEMES)) new Image().src = `assets/anim/${key}.webp`;
+  for (const key of Object.keys(THEMES)) new Image().src = animSrc(key);
 }
 
 /* ---------------- sounds (synthesized with Web Audio, no audio files) ---------------- */
@@ -1764,13 +1768,18 @@ const SOUNDS = {
     noise(t, 1.2, { vol: 0.1, filter: "bandpass", freq: 400, freqTo: 1600, q: 1.2, attack: 0.4 });
     [784, 880, 988, 1175, 1568].forEach((f, i) => tone(f, t + 0.4 + i * 0.12, 0.25, { vol: 0.11 }));
   },
-  // "叽叽喳喳" chatter: quick rising and falling syllables, then a giggle.
+  // A family chat: the kid chatters in a high voice, mom and dad answer lower, then everyone giggles.
   chat(t) {
-    for (let i = 0; i < 8; i++) {
-      const f = rand(380, 620);
-      tone(f, t + i * 0.1, 0.08, { type: "sine", vol: 0.14, slideTo: f * (i % 2 ? 0.75 : 1.35) });
-    }
-    for (let i = 0; i < 4; i++) tone(1100 - i * 80, t + 0.95 + i * 0.07, 0.06, { type: "sine", vol: 0.09, slideTo: 1500 - i * 80 });
+    const syllables = (start, n, lo, hi, vol) => {
+      for (let i = 0; i < n; i++) {
+        const f = rand(lo, hi);
+        tone(f, start + i * 0.1, 0.08, { type: "sine", vol, slideTo: f * (i % 2 ? 0.75 : 1.35) });
+      }
+    };
+    syllables(t, 5, 450, 650, 0.14); // kid
+    syllables(t + 0.6, 3, 300, 400, 0.12); // mom
+    syllables(t + 0.95, 3, 150, 220, 0.16); // dad
+    for (let i = 0; i < 4; i++) tone(1100 - i * 80, t + 1.35 + i * 0.07, 0.06, { type: "sine", vol: 0.09, slideTo: 1500 - i * 80 });
   },
   // Two brush swishes, then a colorful "ta-da" glissando.
   art(t) {

@@ -790,7 +790,7 @@ input:focus { border-color: var(--orange); }
 .m-breathe { animation: breathe 1.6s ease-in-out infinite; }
 .m-dance { animation: dance 0.5s ease-in-out infinite alternate; }
 .m-ride { animation: ride 0.6s ease-in-out infinite alternate; }
-.theme-kindergarten .scene-kid { width: min(86vw, 330px); }
+.theme-kindergarten .scene-kid, .theme-chat .scene-kid { width: min(86vw, 330px); }
 @keyframes wiggle { from { transform: rotate(-5deg) translateX(-4px); } to { transform: rotate(5deg) translateX(4px); } }
 @keyframes hop { from { transform: translateY(0) scaleY(0.96); } to { transform: translateY(-36px); } }
 @keyframes nod { from { transform: rotate(-2deg) translateY(0); } to { transform: rotate(2deg) translateY(5px); } }
