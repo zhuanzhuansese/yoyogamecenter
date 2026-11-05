@@ -29,6 +29,7 @@ body{
   background:linear-gradient(160deg,#16243a,#101b2b);border:1px solid var(--bd);border-radius:18px;
   padding:24px 22px 20px;transition:transform .15s,border-color .15s,box-shadow .15s;overflow:hidden;
 }
+.card[hidden]{display:none}
 .card:hover{transform:translateY(-3px)}
 .card:active{transform:translateY(0)}
 .card .ico{font-size:44px;line-height:1}
@@ -65,6 +66,9 @@ body{
 .card.points{border-color:#6b5a23}
 .card.points:hover{border-color:#FFC93C;box-shadow:0 10px 34px -14px #FFC93C}
 .card.points .go{background:#5a4a1e;color:#ffe9a8}
+.card.star{border-color:#6b3d23}
+.card.star:hover{border-color:#FF9F43;box-shadow:0 10px 34px -14px #FF9F43}
+.card.star .go{background:#5a321e;color:#ffe0c2}
 .foot{text-align:center;color:var(--mu);font-size:12.5px}
 .foot code{color:#9db6d4}
 @media (max-width:640px){
@@ -102,10 +106,17 @@ body{
       <span class="go">开始玩 →</span>
     </a>
 
-    <a class="card points" href="/kids-points.html">
+    <a class="card points" href="/kids-points.html" hidden>
       <div class="ico">🪙</div>
       <h2>积分小钱包</h2>
       <p>做完一件事就点一下任务卡，积分叮叮当当掉进钱包，还有撒花和音效。攒够了去小商店换奖励。家长可以设置任务和奖励，每个小朋友有自己的任务、奖励和钱包。</p>
+      <span class="go">开始玩 →</span>
+    </a>
+
+    <a class="card star" href="/star-hero/">
+      <div class="ico">🌟</div>
+      <h2>星星小勇士</h2>
+      <p>每天完成刷牙、吃饭、去幼儿园这些小任务就得星星，先算对加法才加分，每个任务都有会动的动画和音效。星星攒够了去小卖部的木货架上换奖品。爸爸妈妈用自己的账号登录，看到的是同一个家庭的数据。</p>
       <span class="go">开始玩 →</span>
     </a>
 
@@ -137,7 +148,7 @@ body{
       <span class="go">开始玩 →</span>
     </a>
 
-    <a class="card mtalk" href="https://t-03h0s23q0yngwlgtg7fxioetg-p25807.onamp.dev/">
+    <a class="card mtalk" href="https://t-03h0s23q0yngwlgtg7fxioetg-p25807.onamp.dev/" hidden>
       <div class="ico">🚆</div>
       <h2>地铁聊天小列车</h2>
       <p>坐上深圳地铁，跟列车长小深一站一站聊天。回答问题列车就往前开，换乘就换话题，集星星、盖站章、拿勋章。</p>
