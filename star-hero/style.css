@@ -202,6 +202,15 @@ input { font: inherit; color: inherit; }
   font-size: 12px;
   font-weight: 800;
 }
+/* 扣分 tab: the same rows as tasks, in red. */
+.penalty-group .task-group-btn { background: #ffe4e4; }
+.task.penalty .task-pts { background: #ffe4e4; color: var(--red); }
+.task.penalty.done { background: #fff1f1; border-color: var(--red); }
+.task.penalty.done .task-name { color: var(--red); }
+.task.penalty.done .task-check { border-color: var(--red); background: var(--red); }
+.task.penalty.done + .task-undo { border-color: var(--red); color: var(--red); }
+.wallet.shake { animation: walletShake 0.5s; }
+@keyframes walletShake { 20%, 60% { transform: translateX(-6px) rotate(-3deg); } 40%, 80% { transform: translateX(6px) rotate(3deg); } }
 @keyframes pop { 50% { transform: scale(1.3); } }
 
 .empty { padding: 28px; text-align: center; color: var(--muted); }
@@ -578,7 +587,22 @@ input:focus { border-color: var(--orange); }
 .rec .e-name { flex: 1; min-width: 0; font-weight: 700; }
 .rec .e-name small { display: block; color: var(--muted); font-size: 12px; font-weight: 400; }
 .rec .e-pts { color: #c98a00; font-weight: 800; white-space: nowrap; }
-.rec.buy .e-pts { color: var(--red); }
+.rec.buy .e-pts, .rec.pen .e-pts { color: var(--red); }
+
+.home-link {
+  position: fixed;
+  left: 10px;
+  bottom: calc(84px + env(safe-area-inset-bottom));
+  z-index: 11;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(74, 59, 42, 0.55);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+}
+.home-link[hidden] { display: none; }
 
 /* ---------- Tabs ---------- */
 .tabs {
@@ -587,7 +611,7 @@ input:focus { border-color: var(--orange); }
   bottom: 0;
   z-index: 10;
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   width: min(560px, 100%);
   padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
   transform: translateX(-50%);

@@ -42,6 +42,7 @@ const DEFAULT_STATE = {
   // Task records are the source of truth for completions, streaks and the "today" checkmarks.
   records: [], // { id, taskId, name, icon, points, t, by: { username, role } }, newest first
   redemptions: [], // shop purchases: { id, rewardId, name, icon, cost, t, by }, newest first
+  penalties: [], // tasks not done, costing double their stars: { id, taskId, name, icon, cost, t, by }, newest first
   bonusDays: [],
   history: [], // other star changes: { t, icon, text, amount, by?, type?, date? }
 };
@@ -110,7 +111,7 @@ async function api(url, options = {}) {
 }
 
 async function load() {
-  const res = await api("/api/state");
+  const res = await api("api/state");
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   if (res.status === 204) {
     // Nothing on the server yet: carry over data from the earlier browser-only version once.
@@ -147,7 +148,7 @@ function flushSave() {
 }
 
 async function putState() {
-  const res = await api("/api/state", {
+  const res = await api("api/state", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(state),
@@ -167,7 +168,7 @@ async function putState() {
 async function refresh() {
   if (!me || saveTimer || savesInFlight || document.hidden) return;
   try {
-    const res = await api("/api/state");
+    const res = await api("api/state");
     if (res.status !== 200 || saveTimer || savesInFlight) return;
     const latest = await res.json();
     if (latest.rev === state.rev) return;
@@ -181,7 +182,7 @@ addEventListener("pagehide", () => {
   if (saveTimer) {
     clearTimeout(saveTimer);
     saveTimer = null;
-    navigator.sendBeacon("/api/state", new Blob([JSON.stringify(state)], { type: "application/json" }));
+    navigator.sendBeacon("api/state", new Blob([JSON.stringify(state)], { type: "application/json" }));
   }
 });
 
@@ -341,6 +342,50 @@ function completeTask(task) {
   save();
   render();
   announceNewBadges(badgesBefore, allDone ? 5200 : 2600);
+}
+
+// Not doing a task (自己穿衣服 → didn't dress himself) costs double its stars. Like purchases,
+// penalties come out of the wallet only, so the lifetime total and level stay.
+function penalize(task) {
+  const cost = task.points * 2;
+  confirmModal("😢", `没有${task.name}？`, `扣掉任务分的两倍：${state.balance} − ${cost} = ${state.balance - cost} 颗星星`, `扣 ${cost} 颗`, () => {
+    state.penalties.unshift({ id: newId("pen"), taskId: task.id, name: task.name, icon: task.icon, cost, t: Date.now(), by: byMe() });
+    state.balance -= cost;
+    save();
+    render();
+    const wallet = $(".wallet");
+    wallet.classList.remove("shake");
+    void wallet.offsetWidth;
+    wallet.classList.add("shake");
+    playSound("penalty");
+    toast(`扣了 ${cost} 颗星星，下次加油！`);
+  });
+}
+
+function deletePenalty(pen) {
+  pen = state.penalties.find((p) => p.id === pen.id); // the state may have been refreshed since pen was read
+  if (!pen) return;
+  state.penalties = state.penalties.filter((p) => p.id !== pen.id);
+  state.balance += pen.cost;
+}
+
+// Undo the most recent penalty for this task today; its stars go back into the wallet.
+function undoPenalty(task) {
+  const today = dateKey();
+  const latest = state.penalties.find((p) => p.taskId === task.id && recordDate(p) === today);
+  if (!latest) return;
+  confirmModal("🤔", `撤销一次「没有${task.name}」？`, `扣掉的 ${latest.cost} 颗星星会退回，这条扣分记录也会删除`, "撤销", () => {
+    deletePenalty(latest);
+    save();
+    render();
+    toast(`已退回 ${latest.cost} 颗星星`);
+  });
+}
+
+function updatePenalty(pen, { t, cost }) {
+  state.balance -= cost - pen.cost;
+  Object.assign(pen, { t, cost });
+  state.penalties.sort((a, b) => b.t - a.t);
 }
 
 // Tapping a reward: it drops into the shopping cart, then at the checkout the kid works out
@@ -558,6 +603,7 @@ function render() {
 
   renderTasks(done);
   renderRewards();
+  renderPenalties();
   renderBadges();
   renderHistory();
   if (parentUnlocked) renderParent();
@@ -635,6 +681,53 @@ function taskItem(task, n) {
   return li;
 }
 
+// The 扣分 tab: the opposite of every task ("没有自己穿衣服"), grouped like the task list.
+// Tapping one takes away double the task's stars; today's count and an undo show like on tasks.
+function renderPenalties() {
+  const ul = $("#penaltyList");
+  ul.innerHTML = "";
+  if (!state.tasks.length) {
+    ul.innerHTML = `<li class="empty">还没有任务哦，请爸爸妈妈在「家长」里添加～</li>`;
+    return;
+  }
+  const today = dateKey();
+  const count = (id) => state.penalties.filter((p) => p.taskId === id && recordDate(p) === today).length;
+  for (const group of TASK_GROUPS) {
+    const tasks = state.tasks.filter((t) => groupOf(t) === group.key);
+    if (!tasks.length) continue;
+    const head = document.createElement("li");
+    head.className = "task-group penalty-group";
+    head.innerHTML = `<div class="task-group-btn"><span class="tg-name"></span></div>`;
+    head.querySelector(".tg-name").textContent = group.label;
+    ul.append(head);
+    for (const task of tasks) {
+      const n = count(task.id);
+      const li = document.createElement("li");
+      li.className = "task-item";
+      const btn = document.createElement("button");
+      btn.className = "task penalty" + (n ? " done" : "");
+      btn.innerHTML = `
+        <span class="task-icon"></span>
+        <span class="task-name"></span>
+        <span class="task-pts">−${task.points * 2} ⭐</span>
+        <span class="task-check">${n > 1 ? `×${n}` : "✗"}</span>`;
+      setVisual(btn.querySelector(".task-icon"), task);
+      btn.querySelector(".task-name").textContent = `没有${task.name}`;
+      btn.addEventListener("click", () => penalize(task));
+      li.append(btn);
+      if (n) {
+        const undo = document.createElement("button");
+        undo.className = "task-undo";
+        undo.textContent = "撤销";
+        undo.title = "撤销最近一次扣分";
+        undo.addEventListener("click", () => undoPenalty(task));
+        li.append(undo);
+      }
+      ul.append(li);
+    }
+  }
+}
+
 // Rewards sit on wooden shelves, three per shelf, each with a hanging price tag.
 const PER_SHELF = 3;
 function renderRewards() {
@@ -709,6 +802,7 @@ function setVisual(el, item) {
 // Records keep the task's (or reward's) name/emoji from when they were submitted; images come from
 // the current task or reward.
 const isPurchase = (rec) => "rewardId" in rec;
+const isPenalty = (rec) => "taskId" in rec && "cost" in rec;
 const recordVisual = (rec) => ({
   icon: rec.icon,
   image: isPurchase(rec) ? state.rewards.find((r) => r.id === rec.rewardId)?.image : state.tasks.find((t) => t.id === rec.taskId)?.image,
@@ -718,6 +812,7 @@ const recordRows = () =>
   [
     ...state.records.map((rec) => ({ rec, text: rec.name, amount: rec.points })),
     ...state.redemptions.map((rec) => ({ rec, text: `兑换：${rec.name}`, amount: -rec.cost })),
+    ...state.penalties.map((rec) => ({ rec, text: `没做到：${rec.name}`, amount: -rec.cost })),
   ].sort((a, b) => b.rec.t - a.rec.t);
 const byText = (by) => (by ? `${by.role} ${by.username}` : "");
 const timeText = (t, opts) => new Date(t).toLocaleString("zh-CN", { hour: "2-digit", minute: "2-digit", ...opts });
@@ -795,6 +890,7 @@ function renderRecords() {
   let lastDay = "";
   for (const { rec, text, amount } of rows.slice(0, recordLimit)) {
     const buy = isPurchase(rec);
+    const pen = isPenalty(rec);
     const day = recordDate(rec);
     if (day !== lastDay) {
       lastDay = day;
@@ -804,7 +900,7 @@ function renderRecords() {
       ul.append(h);
     }
     const li = document.createElement("li");
-    li.className = "rec" + (buy ? " buy" : "");
+    li.className = "rec" + (buy ? " buy" : pen ? " pen" : "");
     li.innerHTML = `
       <span class="e-icon"></span>
       <span class="e-name"><span></span><small></small></span>
@@ -816,7 +912,14 @@ function renderRecords() {
     li.querySelector(".e-name small").textContent = `${timeText(rec.t)} · ${byText(rec.by) || "提交人未知"}`;
     li.querySelector('[data-act="edit"]').addEventListener("click", () => openRecordEditor(rec));
     li.querySelector('[data-act="del"]').addEventListener("click", () =>
-      buy
+      pen
+        ? confirmModal("🗑️", "删除这条扣分记录？", `「${rec.name}」扣掉的 ${rec.cost} 颗星会退回`, "删除", () => {
+            deletePenalty(rec);
+            save();
+            render();
+            toast("记录已删除，星星已退回");
+          })
+        : buy
         ? confirmModal("🗑️", "删除这条兑换记录？", `「${rec.name}」花掉的 ${rec.cost} 颗星会退回`, "删除", () => {
             deleteRedemption(rec);
             save();
@@ -918,7 +1021,7 @@ function bindParent() {
 
   $("#exportBtn").addEventListener("click", async () => {
     await flushSave(); // make sure the download includes the very latest changes
-    location.href = "/api/export";
+    location.href = "api/export";
   });
 
   $("#importBtn").addEventListener("click", () => $("#importFile").click());
@@ -932,7 +1035,7 @@ function bindParent() {
         clearTimeout(saveTimer);
         saveTimer = null;
         await saveChain;
-        const res = await api("/api/import", { method: "POST", headers: { "Content-Type": "application/json" }, body: text });
+        const res = await api("api/import", { method: "POST", headers: { "Content-Type": "application/json" }, body: text });
         const body = await res.json();
         if (!res.ok) throw new Error(body.error);
         state = withDefaults(body);
@@ -1094,14 +1197,15 @@ function openRecordEditor(rec) {
   const d = new Date(rec.t);
   const p = (n) => String(n).padStart(2, "0");
   const buy = isPurchase(rec);
+  const pen = isPenalty(rec);
   editingRecordId = rec.id;
   f.when.value = `${dateKey(d)}T${p(d.getHours())}:${p(d.getMinutes())}`;
   f.when.max = `${dateKey()}T23:59`;
-  f.points.value = buy ? rec.cost : rec.points;
-  f.points.max = buy ? 999 : 99;
-  $("#recordEditTitle").textContent = buy ? "修改兑换记录" : "修改任务记录";
-  $("#recordPointsLabel").textContent = buy ? "花费星星" : "星星";
-  $("#recordEditInfo").textContent = `${buy ? "兑换：" : ""}${rec.name} · ${byText(rec.by) || "提交人未知"}`;
+  f.points.value = buy || pen ? rec.cost : rec.points;
+  f.points.max = buy || pen ? 999 : 99;
+  $("#recordEditTitle").textContent = buy ? "修改兑换记录" : pen ? "修改扣分记录" : "修改任务记录";
+  $("#recordPointsLabel").textContent = buy ? "花费星星" : pen ? "扣掉星星" : "星星";
+  $("#recordEditInfo").textContent = `${buy ? "兑换：" : pen ? "没做到：" : ""}${rec.name} · ${byText(rec.by) || "提交人未知"}`;
   openEditor("#recordEditor");
 }
 
@@ -1174,9 +1278,11 @@ function bindEditors() {
     if (t > Date.now() + 60e3) return toast("不能选将来的时间");
     const rec = state.records.find((r) => r.id === editingRecordId);
     const buy = state.redemptions.find((b) => b.id === editingRecordId);
+    const pen = state.penalties.find((p) => p.id === editingRecordId);
     closeEditors();
     if (rec) updateRecord(rec, { t, points: clampInt(rf.points.value, 0, 99) });
     else if (buy) updateRedemption(buy, { t, cost: clampInt(rf.points.value, 0, 999) });
+    else if (pen) updatePenalty(pen, { t, cost: clampInt(rf.points.value, 0, 999) });
     else return toast("这条记录已经被家人删除了");
     save();
     render();
@@ -1552,7 +1658,11 @@ const THEMES = {
     play: ({ cx, cy }) => { spawnFountain(cx, cy, ["💩", "🧻", "👍", "⭐", "✨", "🌟"], 24); spawnTwinkles(["✨", "🌟"], 16); } },
   chat: { label: "聊天", words: ["聊天", "谈心", "说说", "讲讲"], motion: "nod", praise: ["和爸爸妈妈聊得真开心！", "你讲得真好！", "爸爸妈妈最爱听你说话！"],
     play: ({ cx, cy }) => { spawnFloaters(cx, cy, ["💬", "🗨️", "💭", "💖", "😊", "💬"]); spawnTwinkles(["✨", "💕"], 12); } },
-  kindergarten: { label: "幼儿园一起玩", words: ["幼儿园", "上学", "学校", "托班", "分享", "打招呼", "谢谢", "礼貌"], motion: "dance", praise: ["和小朋友玩得真开心！", "幼儿园真好玩！", "交到好朋友啦！"],
+  greet: { label: "打招呼", words: ["打招呼", "问好", "问早", "礼貌", "谢谢", "再见"], motion: "tilt", praise: ["你真有礼貌！", "大声说你好，真棒！", "大家都喜欢你！"],
+    play: ({ cx, cy }) => { spawnFloaters(cx, cy, ["👋", "😊", "💛", "🌟", "👋", "💖"]); spawnTwinkles(["✨", "💫"], 12); } },
+  school: { label: "去幼儿园", words: ["去幼儿园", "上幼儿园", "上学", "学校", "托班", "入园"], motion: "bounce", praise: ["高高兴兴上幼儿园！", "不哭不闹真勇敢！", "老师和小朋友在等你！"],
+    play: ({ cx, cy }) => { spawnFountain(cx, cy, ["🎒", "🏫", "🔔", "☀️", "⭐", "🌟"], 20); spawnTwinkles(["✨"], 10); } },
+  kindergarten: { label: "和小朋友玩", words: ["小朋友", "朋友", "一起玩", "分享", "幼儿园"], motion: "dance", praise: ["和小朋友玩得真开心！", "幼儿园真好玩！", "交到好朋友啦！"],
     play: ({ cx, cy }) => { spawnFloaters(cx, cy, ["🎈", "🎈", "🎈", "🪁", "🌈", "💖", "⭐"]); spawnTwinkles(["✨", "💫"], 14); } },
   hike: { label: "爬山", words: ["爬山", "登山", "徒步", "远足"], motion: "tilt", praise: ["爬到山顶啦！", "小小登山家！", "腿脚真有劲！"],
     play: ({ cx, cy }) => { spawnFountain(cx, cy, ["⛰️", "🌲", "🚩", "🦅", "⭐", "🌟"], 24); spawnTwinkles(["☀️", "✨"], 10); } },
@@ -1596,6 +1706,12 @@ const THEMES = {
     play: ({ cx, cy }) => spawnFountain(cx, cy, ["💪", "⚡", "❤️", "⭐", "💦", "🏅"], 26) },
   tidy: { label: "收拾整理", words: ["收拾", "整理", "打扫", "玩具", "叠", "扫", "碗筷", "擦", "垃圾", "家务"], motion: "shake", praise: ["房间亮堂堂！", "收拾小能手！"],
     play: ({ cx, cy }) => { spawnTwinkles(["✨", "🌟", "💫", "⭐"], 34); spawnFountain(cx, cy, ["🧸", "🧩", "⚽", "🚗"], 10); } },
+  undress: { label: "脱衣服", words: ["脱衣", "脱裤", "脱"], motion: "wiggle", praise: ["自己脱衣服真能干！", "衣服放进脏衣篮啦！", "嘿咻，脱好啦！"],
+    play: ({ cx, cy }) => spawnFountain(cx, cy, ["👕", "🧦", "👖", "🧺", "⭐", "✨"], 18) },
+  shoes: { label: "穿鞋", words: ["穿鞋", "鞋"], motion: "nod", praise: ["自己穿鞋真棒！", "鞋子穿得好整齐！", "可以出发啦！"],
+    play: ({ cx, cy }) => spawnFountain(cx, cy, ["👟", "👣", "⭐", "🌟", "✨"], 18) },
+  fruit: { label: "吃水果", words: ["水果", "苹果", "香蕉", "葡萄", "草莓", "西瓜", "橙子", "橘子"], motion: "bounce", praise: ["水果真好吃！", "吃水果身体棒！", "酸酸甜甜真好吃！"],
+    play: ({ cx, cy }) => spawnFountain(cx, cy, ["🍎", "🍌", "🍇", "🍓", "🍊", "🍉", "🍑", "🍒", "🍍", "🥝"], 24) },
   dress: { label: "穿衣服", words: ["穿衣", "衣服", "穿", "梳头"], motion: "pop", praise: ["自己穿衣真能干！", "穿得真整齐！"],
     play: ({ cx, cy }) => spawnFountain(cx, cy, ["👕", "👖", "🧦", "🧢", "👟", "🧤", "✨"]) },
   drink: { label: "喝水", words: ["喝水", "饮水", "喝牛奶", "喝奶"], motion: "nod", praise: ["咕咚咕咚，真解渴！", "多喝水身体棒！", "喝水小达人！"],
@@ -1680,6 +1796,17 @@ const flyOnce = (inner, path, begin, dur) => `
     ${inner}<animateMotion path="${path}" begin="${begin}s" dur="${dur}s" fill="freeze"/></g>`;
 const flagWave = (a, b, c) =>
   `<animate attributeName="d" values="${a};${b};${a};${c};${a}" dur="0.8s" repeatCount="indefinite"/>`;
+// A rounded white speech chip with bold coloured text, centred on the origin.
+const bubbleChip = (label, color) => {
+  const w = [...label].length * 20 + 24;
+  return `<rect x="${-w / 2}" y="-20" width="${w}" height="40" rx="20" fill="#fff" stroke="#4a3b2a" stroke-width="3"/><text text-anchor="middle" dominant-baseline="central" font-size="22" font-weight="900" fill="${color}">${label}</text>`;
+};
+// A smiling sun with slowly turning rays, centred on the origin.
+const sunFace = (color, rays) => `
+  <g>${[0, 45, 90, 135, 180, 225, 270, 315].map((a) => `<line y1="-31" y2="-43" transform="rotate(${a})" stroke="${rays}" stroke-width="5" stroke-linecap="round"/>`).join("")}${spin("6s")}</g>
+  <circle r="24" fill="${color}" stroke="#e08a00" stroke-width="3"/>
+  <circle cx="-8" cy="-4" r="3" fill="#4a3b2a"/><circle cx="8" cy="-4" r="3" fill="#4a3b2a"/>
+  <path d="M-9 7 q9 8 18 0" fill="none" stroke="#4a3b2a" stroke-width="3" stroke-linecap="round"/>`;
 // Points along the kindergarten bunting string (a quadratic curve).
 const bunting = (t) => [(1 - t) ** 2 * 10 + 2 * (1 - t) * t * 280 + t ** 2 * 550, (1 - t) ** 2 * 20 + 2 * (1 - t) * t * 70 + t ** 2 * 20];
 
@@ -1846,6 +1973,65 @@ const RIGS = {
   chat: {
     box: "0 0 560 398",
     front: [["❤️", 190, 40, 0.3], ["😊", 275, 40, 0.65], ["🌟", 352, 58, 1]].map(([ch, x, y, b]) => popIn(bob(emo(ch, 0, 0, 30), 4, 0.7), x, y, b)).join(""),
+  },
+  // Wave lines flick beside the raised hand and a "你好！" bubble pops up, sending out little hearts.
+  greet: {
+    front: `<g fill="none" stroke="#ff9f43" stroke-width="5" stroke-linecap="round">
+        <g><path d="M84 116 q-12 22 0 44"/><path d="M68 108 q-16 30 0 60"/><animate attributeName="opacity" values="1;0.1;1" dur="0.4s" repeatCount="indefinite"/></g>
+        <g><path d="M152 106 q14 -4 22 6"/><path d="M156 92 q20 -6 32 10"/><animate attributeName="opacity" values="0.1;1;0.1" dur="0.4s" repeatCount="indefinite"/></g></g>
+      ${popIn(bob(`<path d="M-52 -26 H52 a12 12 0 0 1 12 12 V14 a12 12 0 0 1 -12 12 H-18 L-40 44 L-30 26 H-52 a12 12 0 0 1 -12 -12 V-14 a12 12 0 0 1 12 -12Z" fill="#fff" stroke="#4a3b2a" stroke-width="3.5" stroke-linejoin="round"/>
+        <text text-anchor="middle" dominant-baseline="central" font-size="30" font-weight="900" fill="#ff6b6b">你好！</text>`, 4, 0.7), 372, 50, 0.3)}
+      ${[["💛", 0.9], ["💖", 1.25], ["💛", 1.6]].map(([ch, b], i) => flyOnce(emo(ch, 0, 0, 24), `M${400 + i * 14} 18 q${i % 2 ? 24 : -24} -40 ${i * 8} -90`, b, 1)).join("")}`,
+  },
+  // Morning at kindergarten: the sun peeks over the roof, the clock hands whirl, the bell rings
+  // (with flying notes), and the skipping feet kick up little dust puffs.
+  // Morning or afternoon by the task name: the clock hands whirl to 8:00 or 2:30, an orange sun
+  // rises over the roof with birds (morning) or a bright sun stands high overhead (afternoon).
+  school: (task) => {
+    const pm = /下午|午后/.test(task.name);
+    const [h0, h1, m1] = pm ? [30, 75, 540] : [210, 240, 360];
+    const turn = (a0, a1) => `<animateTransform attributeName="transform" type="rotate" from="${a0}" to="${a1}" begin="0.2s" dur="1.3s" fill="freeze" calcMode="spline" keyTimes="0;1" keySplines="0.3 0 0.3 1"/>`;
+    return { front: `${pm ? popIn(sunFace("#ffd23f", "#ffb703"), 232, 26, 0.2, 1.1) : `
+      <g transform="translate(392 128)"><g transform="translate(0 70)">${sunFace("#ffb347", "#ff8c42")}
+        <animateTransform attributeName="transform" type="translate" values="0 70;0 -12;0 0" keyTimes="0;0.75;1" begin="0.2s" dur="0.8s" fill="freeze"/></g></g>
+      ${bird(30, 0.3, 2.6)}`}
+      <g transform="translate(310 184)">
+        <circle r="20" fill="#fff"/>
+        ${[0, 90, 180, 270].map((a) => `<line y1="-17" y2="-13" transform="rotate(${a})" stroke="#1e6fd0" stroke-width="3" stroke-linecap="round"/>`).join("")}
+        <g><line y2="-15" stroke="#1e6fd0" stroke-width="3" stroke-linecap="round"/>${turn(0, m1)}</g>
+        <g transform="rotate(${h0})"><line y2="-10" stroke="#1e6fd0" stroke-width="4" stroke-linecap="round"/>${turn(h0, h1)}</g>
+        <circle r="3" fill="#1e6fd0"/>
+      </g>
+      ${popIn(bubbleChip(pm ? "下午 2:30" : "早上 8:00", pm ? "#e67e22" : "#ff6b6b"), pm ? 344 : 296, 74, 1.5)}
+      <g fill="none" stroke="#ffb703" stroke-width="4" stroke-linecap="round">
+        <g><path d="M372 208 q-8 10 0 20"/><path d="M362 202 q-12 16 0 32"/><path d="M412 208 q8 10 0 20"/><path d="M422 202 q12 16 0 32"/>
+          <animate attributeName="opacity" values="1;0.1;1" dur="0.25s" repeatCount="indefinite"/></g></g>
+      ${[["🎵", 0.3], ["🎶", 0.8], ["🎵", 1.3]].map(([ch, b], i) => flyOnce(emo(ch, 0, 0, 26), `M392 210 q${i % 2 ? -30 : 30} -40 ${i % 2 ? 10 : -10} -110`, b, 1.1)).join("")}
+      ${[[54, 350, 0], [40, 340, 0.2], [150, 392, 0.35], [134, 388, 0.55]].map(([x, y, b]) => pulseR(x, y, 9, b, 0.7, "#f3ead8", "#c9b48a")).join("")}` };
+  },
+  // "嘿咻！" — arms tug the sweater off, and the clothes fly one by one into the laundry basket.
+  undress: {
+    front: `<g fill="none" stroke="#ff9f43" stroke-width="5" stroke-linecap="round">
+        <g><path d="M96 64 q-14 16 -6 34"/><path d="M80 52 q-20 22 -10 50"/><animate attributeName="opacity" values="1;0.1;1" dur="0.35s" repeatCount="indefinite"/></g>
+        <g><path d="M340 64 q14 16 6 34"/><path d="M356 52 q20 22 10 50"/><animate attributeName="opacity" values="0.1;1;0.1" dur="0.35s" repeatCount="indefinite"/></g></g>
+      ${popIn(bob(bubbleChip("嘿咻！", "#ff6b6b"), 4, 0.6), 388, 200, 0.2)}
+      ${[["🧦", 0.4], ["👖", 0.85], ["👕", 1.3]].map(([ch, b], i) =>
+        flyOnce(emo(ch, 0, 0, 34), `M${70 + i * 30} ${30 + i * 10} Q220 ${-70 + i * 20} ${330 + i * 14} 296`, b, 0.6) +
+        `<g opacity="0">${emo("✨", 336 + i * 14, 268, 28)}${once("opacity", "0;1;0", b + 0.6, 0.4)}</g>`).join("")}`,
+  },
+  // The velcro straps zip shut ("嘶啦") with a sparkle each, "粘好啦！", then little footsteps head off.
+  shoes: {
+    front: `${[[250, 352], [110, 352]].map(([x, y], i) => `
+        <path d="M${x - 26} ${y} l8 -8 l8 8 l8 -8 l8 8 l8 -8 l8 8" fill="none" stroke="#ffd23f" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="80" stroke-dashoffset="80">
+          ${once("stroke-dashoffset", "80;0", 0.2 + i * 0.5, 0.35)}${once("opacity", "1;0", 0.75 + i * 0.5, 0.3)}</path>
+        ${popIn(emo("✨", 0, 0, 30), x + 30, y - 22, 0.55 + i * 0.5)}`).join("")}
+      ${popIn(bob(bubbleChip("粘好啦！", "#3d8bff"), 4, 0.6), 376, 90, 1.2)}
+      ${[[334, 428], [374, 408], [414, 388]].map(([x, y], i) => popIn(emo("👣", 0, 0, 26), x, y, 1.4 + i * 0.2)).join("")}`,
+  },
+  // All kinds of fruit pop up around the head one after another and bob there.
+  fruit: {
+    front: [["🍎", 40, 50], ["🍌", 400, 50], ["🍇", 30, 130], ["🍓", 410, 130], ["🍊", 36, 210], ["🍉", 404, 210], ["🍑", 160, -16], ["🍒", 280, -16]].map(([ch, x, y], i) =>
+      popIn(bob(emo(ch, 0, 0, 40), 6, 0.6 + (i % 3) * 0.1), x, y, 0.25 + i * 0.16)).join(""),
   },
   // A string of party flags sways above the friends.
   kindergarten: {
@@ -2022,8 +2208,8 @@ function themeFor(task) {
 // chose one for it (task.group); tasks with no group theme land in "其他".
 const TASK_GROUPS = [
   { key: "clean", label: "🧼 洗漱卫生", themes: ["brush", "wash", "hair", "bath", "potty"] },
-  { key: "life", label: "🍚 生活自理", themes: ["eat", "drink", "dress", "sleep", "tidy", "lookfar"] },
-  { key: "kinder", label: "🏫 幼儿园和朋友", themes: ["kindergarten", "class", "chat"] },
+  { key: "life", label: "🍚 生活自理", themes: ["eat", "fruit", "drink", "dress", "undress", "shoes", "sleep", "tidy", "lookfar"] },
+  { key: "kinder", label: "🏫 幼儿园和朋友", themes: ["school", "greet", "kindergarten", "class", "chat"] },
   { key: "study", label: "📚 学习兴趣", themes: ["math", "homework", "read", "art", "guzheng", "music", "chess"] },
   { key: "sport", label: "🏃 运动户外", themes: ["sport", "bike", "outdoor", "hike", "park"] },
   { key: "play", label: "🎲 玩耍", themes: ["foosball", "boardgame", "tetris", "cartoon"] },
@@ -2039,7 +2225,7 @@ function celebrate(task) {
   document.querySelectorAll(".rp-overlay, .scene-overlay").forEach((o) => o.remove()); // quick taps: newest only
   const overlay = document.createElement("div");
   overlay.className = `scene-overlay theme-${key}`;
-  const rig = RIGS[key] || {};
+  const rig = (typeof RIGS[key] === "function" ? RIGS[key](task) : RIGS[key]) || {};
   const layer = (cls, svg) => (svg ? `<svg class="rig ${cls}" viewBox="${rig.box || "0 0 440 440"}" aria-hidden="true">${svg}</svg>` : "");
   // Shared fun for every theme: spinning sun rays behind the kid, a comic "哇！" sticker, and the
   // earned stars popping in one by one while the number counts up.
@@ -2174,6 +2360,18 @@ const SOUNDS = {
     [659, 784, 1047].forEach((f) => tone(f, t + 0.48, 0.5, { vol: 0.1 }));
   },
   // Bouncy playground xylophone tune with giggly trills.
+  // "叮咚" and a friendly rising "hi!" chirp, then sparkles.
+  greet(t) {
+    tone(784, t, 0.35, { type: "sine", vol: 0.2 });
+    tone(587, t + 0.3, 0.45, { type: "sine", vol: 0.2 });
+    tone(523, t + 0.85, 0.18, { type: "triangle", vol: 0.14, slideTo: 880 });
+    [1568, 2093, 2637].forEach((f, i) => tone(f, t + 1.15 + i * 0.08, 0.22, { type: "sine", vol: 0.08 }));
+  },
+  // The kindergarten bell "铃铃铃", then a bouncy little morning tune.
+  school(t) {
+    for (let i = 0; i < 10; i++) tone(i % 2 ? 2000 : 1780, t + i * 0.055, 0.05, { type: "square", vol: 0.045 });
+    [523, 659, 784, 1047].forEach((f, i) => tone(f, t + 0.7 + i * 0.14, 0.2, { vol: 0.14 }));
+  },
   kindergarten(t) {
     [523, 659, 784, 1047, 784, 659, 784, 1047].forEach((f, i) => tone(f, t + i * 0.11, 0.18, { vol: 0.14 }));
     for (let i = 0; i < 3; i++) {
@@ -2214,11 +2412,34 @@ const SOUNDS = {
     noise(t, 1, { vol: 0.12, filter: "bandpass", freq: 1500, q: 0.7, attack: 0.1 });
     [1568, 1760, 2093, 2637].forEach((f, i) => tone(f, t + 1 + i * 0.06, 0.22, { type: "sine", vol: 0.1 }));
   },
+  // A sad little "哇——哇——哇——哇～" for a task not done.
+  penalty(t) {
+    [392, 370, 349].forEach((f, i) => tone(f, t + i * 0.32, 0.3, { type: "triangle", vol: 0.16, slideTo: f * 0.97 }));
+    tone(330, t + 0.96, 0.7, { type: "triangle", vol: 0.16, slideTo: 262 });
+  },
   // "哗——" water pours from the cup, bubbles bloop up, then a clean sparkle.
   hair(t) {
     noise(t, 0.9, { vol: 0.22, filter: "bandpass", freq: 800, freqTo: 2400, q: 0.6, attack: 0.08 });
     [0.95, 1.1, 1.22].forEach((d, i) => tone(500 + i * 180, t + d, 0.1, { type: "sine", vol: 0.14, slideTo: 1200 + i * 200 }));
     [1568, 2093, 2637].forEach((f, i) => tone(f, t + 1.4 + i * 0.07, 0.25, { type: "sine", vol: 0.09 }));
+  },
+  // "嘿咻" whoosh of the sweater coming off, a soft plop into the basket, then a chime.
+  undress(t) {
+    noise(t, 0.35, { vol: 0.14, filter: "bandpass", freq: 2600, freqTo: 500, q: 1.2, attack: 0.05 });
+    tone(220, t + 0.45, 0.12, { type: "sine", vol: 0.2, slideTo: 110 });
+    [784, 988, 1319].forEach((f, i) => tone(f, t + 0.7 + i * 0.1, 0.25, { vol: 0.1 }));
+  },
+  // Velcro "嘶啦 嘶啦", two little steps "嗒嗒", then a chime.
+  shoes(t) {
+    [0, 0.45].forEach((d) => noise(t + d, 0.22, { vol: 0.16, filter: "highpass", freq: 2500, attack: 0.01 }));
+    [0.95, 1.15].forEach((d) => tone(180, t + d, 0.07, { type: "triangle", vol: 0.2, slideTo: 120 }));
+    [659, 880, 1175].forEach((f, i) => tone(f, t + 1.35 + i * 0.09, 0.22, { vol: 0.1 }));
+  },
+  // Crunchy "咔嚓" bites, a juicy "啵", then a sweet little tune.
+  fruit(t) {
+    [0, 0.25].forEach((d) => noise(t + d, 0.08, { vol: 0.22, filter: "bandpass", freq: 3200, q: 0.8 }));
+    tone(600, t + 0.5, 0.12, { type: "sine", vol: 0.16, slideTo: 1200 });
+    [784, 988, 1175, 1568].forEach((f, i) => tone(f, t + 0.75 + i * 0.1, 0.2, { vol: 0.1 }));
   },
   // A splash, then the rubber duck squeaks twice.
   bath(t) {
@@ -2431,7 +2652,7 @@ async function enterApp(profile) {
 
 async function start() {
   try {
-    const res = await fetch("/api/me", { cache: "no-store" });
+    const res = await fetch("api/me", { cache: "no-store" });
     if (res.ok) return enterApp(await res.json());
     showAuth();
   } catch {
@@ -2476,7 +2697,7 @@ function bindRoleChips(form) {
 
 async function loadMembers() {
   try {
-    const res = await api("/api/family");
+    const res = await api("api/family");
     const family = await res.json();
     members = family.members;
     me.family.name = family.name;
@@ -2510,7 +2731,7 @@ function renderMembers() {
       del.addEventListener("click", () =>
         confirmModal("👋", `移除「${m.role}」的账号？`, `${m.username} 将不能再登录这个家庭`, "移除", async () => {
           try {
-            const res = await api(`/api/family/members/${encodeURIComponent(m.username)}`, { method: "DELETE" });
+            const res = await api(`api/family/members/${encodeURIComponent(m.username)}`, { method: "DELETE" });
             if (!res.ok) throw new Error((await res.json()).error);
             toast("已移除");
           } catch (err) {
@@ -2537,7 +2758,7 @@ function bindAuth() {
     const register = authMode === "register";
     $("#authSubmit").disabled = true;
     try {
-      const res = await fetch(register ? "/api/families" : "/api/login", {
+      const res = await fetch(register ? "api/families" : "api/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(register ? { ...creds, familyName: f.familyName.value.trim(), role: f.role.value.trim() } : creds),
@@ -2558,7 +2779,7 @@ function bindAuth() {
     e.preventDefault();
     const f = e.target;
     try {
-      const res = await api("/api/family/members", {
+      const res = await api("api/family/members", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ role: f.role.value.trim(), username: f.username.value.trim(), password: f.password.value }),
@@ -2588,7 +2809,7 @@ function bindAuth() {
       return;
     }
     try {
-      const res = await api("/api/password", {
+      const res = await api("api/password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ oldPassword: f.oldPassword.value, newPassword: f.newPassword.value }),
@@ -2603,7 +2824,7 @@ function bindAuth() {
 
   $("#logoutBtn").addEventListener("click", async () => {
     if (saveTimer) await flushSave();
-    await fetch("/api/logout", { method: "POST" }).catch(() => {});
+    await fetch("api/logout", { method: "POST" }).catch(() => {});
     me = null;
     showAuth();
   });
@@ -2623,6 +2844,8 @@ $("#soundBtn").addEventListener("click", () => {
   updateSoundBtn();
   playSound("ding");
 });
+// Inside 佑佑的游戏屋 (served under /star-hero/) offer a way back to the game house, like its other games.
+document.getElementById("homeLink").hidden = !location.pathname.startsWith("/star-hero/");
 updateSoundBtn();
 preloadThemes();
 bindParent();

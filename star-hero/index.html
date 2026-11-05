@@ -77,6 +77,14 @@
         </div>
       </section>
 
+      <section class="panel" id="panel-penalty">
+        <div class="panel-head">
+          <h2>扣分</h2>
+          <span class="date">没做到就扣双倍星星</span>
+        </div>
+        <ul class="task-list" id="penaltyList"></ul>
+      </section>
+
       <section class="panel" id="panel-me">
         <div class="panel-head"><h2>我的徽章</h2></div>
         <ul class="badge-grid" id="badgeList"></ul>
@@ -128,7 +136,7 @@
           </div>
 
           <div class="card">
-            <h3>🗂️ 任务和兑换记录</h3>
+            <h3>🗂️ 任务、兑换和扣分记录</h3>
             <p class="hint">每次完成任务、兑换奖品都会记一条：谁提交的、什么时间。误加的记录可以修改或删除，星星会自动退回。</p>
             <ul class="record-list" id="recordList"></ul>
             <button class="btn wide hidden" id="moreRecords">显示更多</button>
@@ -180,6 +188,7 @@
     <nav class="tabs">
       <button class="tab active" data-tab="tasks"><span>📋</span>任务</button>
       <button class="tab" data-tab="shop"><span>🎁</span>商店</button>
+      <button class="tab" data-tab="penalty"><span>😢</span>扣分</button>
       <button class="tab" data-tab="me"><span>🏅</span>我的</button>
       <button class="tab" data-tab="parent"><span>👨‍👩‍👧</span>家长</button>
     </nav>
@@ -275,6 +284,7 @@
     <option value="外婆"></option>
   </datalist>
 
+  <a class="home-link" id="homeLink" href="/" hidden>🏠 游戏屋</a>
   <div class="toast" id="toast"></div>
   <canvas id="confetti"></canvas>
 
