@@ -943,7 +943,7 @@ const LAN_URL='https://192.168.3.88:8727/youyou-metro-topic-game.html';
 fetch('api/health',{cache:'no-store'}).then(r=>r.ok?r.json():null)
   .then(j=>{ if(j&&j.amp){
     ampAI=true; updateCfgBtn();
-    $('homeBtn').href=new URL('/', LAN_URL).href;   // Amp 托管版没有主页，「🏠 游戏屋」回局域网游戏屋（唯一入口）
+    if(location.pathname==='/') $('homeBtn').href=new URL('/', LAN_URL).href;   // 游戏屋里打开时（不在根路径）回本站的游戏屋   // Amp 托管版没有主页，「🏠 游戏屋」回局域网游戏屋（唯一入口）
   } }).catch(()=>{});
 
 async function aiScore(text, topicName){

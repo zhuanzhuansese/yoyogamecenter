@@ -16,6 +16,8 @@ button{font:inherit;cursor:pointer}
 
 #hud{position:fixed;left:0;right:0;top:0;display:flex;align-items:flex-start;gap:10px;padding:calc(10px + env(safe-area-inset-top)) 12px 0;pointer-events:none}
 #hud .l{display:flex;gap:8px;pointer-events:auto}
+#aiRoute{position:fixed;right:12px;top:calc(104px + env(safe-area-inset-top));z-index:60;pointer-events:none;background:rgba(255,255,255,.88);color:#0f766e;font-size:12px;font-weight:800;padding:3px 10px;border-radius:999px;box-shadow:0 4px 14px -6px rgba(0,0,0,.3)}
+#aiRoute.local{color:#9a3412}
 .hb{border:0;border-radius:14px;background:rgba(255,255,255,.85);color:#334155;font-size:20px;font-weight:800;padding:6px 12px;text-decoration:none;box-shadow:0 4px 14px -6px rgba(0,0,0,.3)}
 #wx:empty{display:none}
 #target{margin:0 auto;display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.92);border-radius:20px;padding:6px 18px 6px 14px;box-shadow:0 6px 20px -8px rgba(0,0,0,.35);border-bottom:5px solid var(--mc)}
@@ -175,6 +177,7 @@ button{font:inherit;cursor:pointer}
   <div id="target"><span id="tLabel">撞数字</span><span id="tBig">1</span></div>
   <div id="hearts"></div>
 </div>
+<div id="aiRoute"></div>
 <div id="slots"></div>
 <div id="toast"></div>
 <div id="help">按住屏幕左边 / 右边，或者左右拖动，让球去撞对的东西</div>
@@ -219,6 +222,9 @@ const VEHICLE = [['汽车','🚗'],['公交车','🚌'],['救护车','🚑'],['�
   ['摩托车','🏍️'],['卡车','🚚'],['直升机','🚁'],['飞机','✈️'],['火箭','🚀'],['轮船','🚢'],['帆船','⛵'],['火车','🚂'],['高铁','🚄'],['地铁','🚇'],['滑板车','🛴'],['电动车','🛵']];
 const CANDY = [['糖果','🍬'],['棒棒糖','🍭'],['巧克力','🍫'],['甜甜圈','🍩'],['饼干','🍪'],['纸杯蛋糕','🧁'],['蛋糕','🍰'],['生日蛋糕','🎂'],
   ['冰淇淋','🍦'],['圣代','🍨'],['刨冰','🍧'],['布丁','🍮'],['派','🥧'],['华夫饼','🧇'],['松饼','🥞'],['月饼','🥮']];
+/* 饼干模式：饼干 emoji 太少分不出来，第三项是画在圆牌上的样子；emoji 只用在提示、名字牌和卡片介绍上 */
+const COOKIE = [['巧克力曲奇','🍪','chip'],['幸运饼干','🥠'],['华夫饼','🧇'],['夹心饼干','🍪','sandwich'],['小熊饼干','🐻','bear'],['姜饼人','🍪','ginger'],
+  ['爱心饼干','💗','heart'],['星星饼干','⭐','star'],['果酱饼干','🍓','jam'],['手指饼干','🍪','finger'],['苏打饼干','🍪','cracker'],['扭扭饼干','🥨'],['仙贝','🍘']];
 const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 /* 字母模式学完 26 个字母，后面几关是「看图找单词」：顶上卡片是图，轨道上是写出来的英文单词，撞对的那个 */
 const WORD_STAGES = [
@@ -277,7 +283,9 @@ const MODES = [
   { id:'veg',    name:'蔬菜', emoji:'🥕', color:'#16A34A', noun:'蔬菜', items:VEG.map(x => word('蔬菜', x)), ball:'mouse', ballName:'🐭 小老鼠吃蔬菜' },
   { id:'fruit',  name:'水果', emoji:'🍎', color:'#EF4444', noun:'水果', items:FRUIT.map(x => word('水果', x)), ball:'melon', ballName:'🍉 西瓜球' },
   { id:'animal', name:'动物', emoji:'🐶', color:'#F59E0B', noun:'动物', items:ANIMAL.map(x => word('动物', x)), ball:'hedgehog', ballName:'🦔 刺猬球' },
-  { id:'candy',  name:'糖果', emoji:'🍭', color:'#EC4899', noun:'甜食', items:CANDY.map(x => word('甜食', x)), donut:true, ballName:'🍩 草莓巧克力甜甜圈球' },
+  { id:'candy',  name:'糖果', emoji:'🍭', color:'#EC4899', noun:'甜食', items:CANDY.map(x => word('甜食', x)), donut:true, near:'cookie', ballName:'🍩 草莓巧克力甜甜圈球' },
+  // near：两个模式的东西长得像（饼干也是甜食），互相不拿来当「撞错」的东西
+  { id:'cookie', name:'饼干', emoji:'🍪', color:'#B45309', noun:'饼干', items:COOKIE.map(([l, e, c]) => ({ ...word('饼干', [l, e]), cookie:c })), ball:'cookie', near:'candy', ballName:'🍪 巧克力曲奇球' },
   { id:'train',  name:'火车', emoji:'🚂', color:'#C2410C', noun:'交通工具', items:VEHICLE.map(x => word('交通工具', x)), ball:'train', world:'rail', ballName:'🚂 小火车头 · 穿山跨海' },
   // 深圳地铁：每一排是一站。快到站时列车停下，跟列车长小深聊一句切题的话，才开进这一站、再开往下一站
   { id:'metro', name:'深圳地铁', emoji:'🚇', color:'#07AC53', noun:'车站', seq:true, talk:true, stages:METRO_LINES,
@@ -486,7 +494,7 @@ function drawGate(x, y, w, s, row, now){
 // 换乘站：可以继续坐、换乘别的线（往哪个方向都行），也可以换个话题
 // 话题由佑佑（或家长）自己选：每局开始选一次，换乘站可以换
 const TOPIC_LOOK = { subway:['🚇', '地铁'], family:['👨‍👩‍👦', '家人'], kinder:['🏫', '幼儿园'], friend:['🤝', '朋友'], fruit:['🍎', '水果'], veg:['🥕', '蔬菜'],
-  animal:['🐶', '动物'], candy:['🍭', '甜食'], train:['🚗', '交通工具'], weather:['☀️', '天气'], time:['⏰', '时间'], number:['🔢', '数字'] };
+  animal:['🐶', '动物'], candy:['🍭', '甜食'], cookie:['🍪', '饼干'], train:['🚗', '交通工具'], weather:['☀️', '天气'], time:['⏰', '时间'], number:['🔢', '数字'] };
 const look = t => TOPIC_LOOK[t.id] || ['💬', t.noun];
 const topicOrder = () => Object.keys(TOPIC_LOOK).map(id => TALK_TOPICS.find(t => t.id === id)).filter(Boolean);
 const topicBtn = (t, onPick) => { const b = document.createElement('button'); b.className = 'topicB'; b.innerHTML = `<span>${look(t)[0]}</span>${look(t)[1]}`; b.onclick = () => onPick(t); return b; };
@@ -526,8 +534,9 @@ function topicChooser(box, onPick, exclude){
     if (stop){ stop(); return; }
     stopSpeech();
     mic.classList.add('on'); mic.textContent = '🔴 我在听…'; heardEl.textContent = '';
-    stop = listenOnce(t => { heardEl.textContent = `🎤 ${t}`; }, text => {
+    stop = listenOnce(t => { heardEl.textContent = `🎤 ${t}`; }, async text => {
       stop = null; mic.classList.remove('on'); mic.textContent = idle;
+      if (text){ heardEl.textContent = '想一想…'; text = await fixTopicWords(text, []); }
       const t = text && topicFromSpeech(text);
       if (!t){ heardEl.textContent = '没听清，再点一下说一次，或者点着选～'; if (more.isConnected) more.click(); return; }
       heardEl.textContent = `${look(t)[0]} ${t.noun}`;
@@ -603,7 +612,13 @@ function reaskTopic(){
   if (topicVoice()) clearHints(); else showTopicChips();
   setAiInput(false);
 }
-function topicAnswer(text){
+// 说想聊的话题时，先请 AI 按话题清单纠正听错的字
+async function fixTopicWords(text, alts){
+  if (!aiReady()) return text;
+  return (await aiHear(alts.length ? alts : [text], `佑佑在说想聊什么话题，常见话题有：${TALK_TOPICS.map(t => t.noun).join('、')}（也可以是别的）。`)) || text;
+}
+async function topicAnswer(text, alts = []){
+  if (!game.pendingTopic && alts.length){ game.aiBusy = true; text = await fixTopicWords(text, alts); game.aiBusy = false; }
   chatAdd('me', text);
   if (game.pendingTopic){
     const r = readConfirm(text, game.pendingTopic);
@@ -916,7 +931,7 @@ function currentTarget(){
 }
 function distractors(target, n){
   const m = game.mode, out = [];
-  const others = WORD_MODES.filter(w => w !== m).flatMap(w => w.items);
+  const others = WORD_MODES.filter(w => w !== m && w.id !== m.near).flatMap(w => w.items);
   const used = new Set([target.key]);
   const add = it => { if (it && !used.has(it.key)){ used.add(it.key); out.push(it); } };
   if (m.id === 'metro'){
@@ -1042,7 +1057,7 @@ function startMode(id, topicId){
   game.aiQ = (m.seq && !m.talk) || game.pickTopic ? '' : `我们来聊${topicMode().noun}吧！${topicMode().ask || `你最喜欢什么${topicMode().noun}呀？`}`;   // 顺序模式的问题由 seqAsk 按这一排的目标出
   $('count').textContent = ''; $('pauseBtn').textContent = '⏸';
   Object.assign(ball, { x:0, vx:0, hop:0, hopV:0, falling:false, fallT:0, inv:0 });
-  dist = 0; speed = 0; particles = [];
+  dist = 0; speed = 0; particles = []; flyers = [];
   document.documentElement.style.setProperty('--mc', m.color);
   game.env = m.world === 'coaster' ? (Math.random() < 0.5 ? { time:'day', weather:'balloon' } : { time:'night', weather:'fireworks' }) : rollEnv(); game.inTunnel = false;
   if (m.city && game.env.weather === 'snow') game.env.weather = 'rain';   // 深圳不下雪
@@ -1053,7 +1068,7 @@ function startMode(id, topicId){
   $('help').style.opacity = talkMode() ? 0 : 1;
   showAiPanel(talkMode());
   updateHud();
-  game.state = 'count'; game.countT = 3.2;
+  game.state = 'count'; game.countT = 3.2; renderRoute();
   setTimeout(() => { if (game.state === 'count') toast(`${envBadge(game.env)} 今天：${TIMES[game.env.time].name} · ${WEATHERS[game.env.weather].name}`); }, 200);
   // 天气放前面、题目放最后（以前天气接在题目后面念，孩子听完就忘了题）。AI 模式的题目到第一排由小球在对话里问
   const q0 = game.seq && game.seq[0].q ? game.seq[0] : null;
@@ -1072,15 +1087,24 @@ const saveOpts = () => { try{ localStorage.setItem(OPT_KEY, JSON.stringify(opts)
    Amp 沙盒里有 api/chat 时直接走 Amp AI。都没有就用本地规则判断，照样能玩 */
 const cfg = { endpoint:'https://api.openai.com/v1', key:'', model:'gpt-4o-mini' };
 try{ const c = JSON.parse(localStorage.getItem('yy-metro-cfg') || '{}'); if (c.key) Object.assign(cfg, { endpoint:c.endpoint || cfg.endpoint, key:c.key, model:c.model || cfg.model }); }catch(e){}
-let ampAI = false;
+let ampAI = false, aiModel = '', aiFailed = false;
+// 右上角小牌子：对话和语音纠错现在走哪条路（Amp AI / 哪家的 API / 本地脚本）
+function renderRoute(){
+  let host = ''; try{ host = new URL(cfg.endpoint).hostname; }catch(e){}
+  const api = /deepseek/i.test(host) ? 'DeepSeek API' : /openai/i.test(host) ? 'OpenAI API' : `${host || '自定义'} API`;
+  $('aiRoute').textContent = aiFailed ? '📜 本地脚本（AI 没连上）' : ampAI ? `🤖 Amp AI · ${aiModel.split('/').pop() || '默认模型'}` : cfg.key ? `🔑 ${api} · ${cfg.model}` : '📜 本地脚本';
+  $('aiRoute').classList.toggle('local', aiFailed || !aiReady());
+  $('aiRoute').hidden = game.state === 'menu';   // 选模式的时候会盖住卡片，进了游戏再显示
+}
 fetch('ai-config.json', { cache:'no-store' }).then(r => r.ok ? r.json() : null).then(c => {
   if (c && c.key) Object.assign(cfg, { endpoint:(c.endpoint || cfg.endpoint).trim(), key:c.key.trim(), model:(c.model || cfg.model).trim() });
   renderToggles();
 }).catch(() => {});
-fetch('api/health', { cache:'no-store' }).then(r => r.ok ? r.json() : null).then(j => { if (j && j.amp){ ampAI = true; renderToggles(); } }).catch(() => {});
+fetch('api/health', { cache:'no-store' }).then(r => r.ok ? r.json() : null).then(j => { if (j && j.amp){ ampAI = true; aiModel = j.model || ''; renderToggles(); } }).catch(() => {});
 const aiReady = () => ampAI || !!cfg.key;
 
 function renderToggles(){
+  renderRoute();
   $('tgAI').classList.toggle('on', opts.ai); $('tgAI').innerHTML = `🤖 AI 对话：<b>${opts.ai ? '开' : '关'}</b>`;
   $('tgFence').classList.toggle('on', opts.fence); $('tgFence').innerHTML = `🚧 护栏：<b>${opts.fence ? '开' : '关'}</b>`;
   const notes = [];
@@ -1111,6 +1135,11 @@ function lastNum(text){
   for (const ch of s){ if (ch === '十' || ch === '百'){ total += (cur || 1) * (ch === '十' ? 10 : 100); cur = 0; } else cur = CN_NUM[ch]; }
   return total + cur;
 }
+// 顺序模式这一题该说什么类型的话（给 AI 纠错用，不含答案）
+function seqKind(row){
+  const t = row.items.find(i => i.ok);
+  return t.cat === '数字' ? '这一题佑佑要说一个数字（可能是中文数字，比如「四」常被听成「是」）。' : t.cat === '字母' ? '这一题佑佑要说一个英文字母（比如「B」常被听成「必」）。' : '这一题佑佑要说一个汉字或者带这个字的词。';
+}
 function seqTalk(row, text){
   const t = row.items.find(i => i.ok);
   const ok = t.cat === '数字' ? lastNum(text) === (t.ans != null ? t.ans : +t.key)
@@ -1134,6 +1163,7 @@ function chatAdd(who, text){
   const log = $('aiLog'); log.appendChild(row);
   while (log.children.length > (big ? 2 : 30)) log.removeChild(log.firstChild);
   log.scrollTop = log.scrollHeight;
+  return b;
 }
 function showAiPanel(on){
   $('aiPanel').classList.toggle('on', on);
@@ -1213,13 +1243,8 @@ function localTalk(text){
   else pool = [`${s}是什么颜色的呀？`, `${s}是什么味道的？`, `你为什么喜欢${s}呀？`, `${s}是圆圆的还是长长的？`];
   return { ok:true, reply:`${pick(['说得真好！', '对呀！', '好棒！'])}${pick(pool)}` };
 }
-async function aiChat(text){
-  const m = topicMode(), host = hostName();
-  const topic = m.noun;
-  const hist = game.convo.slice(-8).map(c => `${c.role === 'kid' ? '佑佑' : host}：${c.text}`).join('\n');
-  const system = (game.mode.talk ? '你是深圳地铁的「列车长小深」，陪 4 岁半、特别喜欢地铁的佑佑坐地铁、练口语。每到一站，佑佑要说一句话接着当前话题往下聊，说得切题列车才开进这一站。'
-    : '你是「小球」，陪 4 岁半的佑佑玩天空滚球游戏、练口语。每到一站，佑佑要说一句话接着当前话题往下聊，说得切题小球才往前滚。') + '你要：1) 判断佑佑这句话是不是在聊当前话题，或者是在回答你上一句的提问（回答你的问题就算切题，哪怕提到别的东西）；跟之前说过的一模一样的话不算；2) 用一句简单好玩的短话回应，并接着话题再问一个小问题，让他继续说。只输出一行 JSON，不要任何解释。';
-  const prompt = `当前话题：${topic}\n对话历史：\n${hist || '（刚开始）'}\n${host}上一句：${game.aiQ}\n佑佑刚刚说：${text}\n\n只返回：{"ok": true或false, "reply": "你对佑佑说的话，25字以内；切题就夸一句再问一个相关的小问题，不切题就温柔地提醒他聊${m.noun}"}`;
+// 问 AI 要一行 JSON：有 Amp AI 走 api/chat，否则用配置的 API Key；失败就标记成本地脚本
+async function aiJSON(system, prompt, temperature = 0.7){
   const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 12000);
   try{
     let o = null;
@@ -1230,32 +1255,69 @@ async function aiChat(text){
     } else {
       const r = await fetch(cfg.endpoint.replace(/\/+$/, '') + '/chat/completions', {
         method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer ' + cfg.key }, signal:ctl.signal,
-        body:JSON.stringify({ model:cfg.model, temperature:0.7, messages:[{ role:'system', content:system }, { role:'user', content:prompt }] })
+        body:JSON.stringify({ model:cfg.model, temperature, messages:[{ role:'system', content:system }, { role:'user', content:prompt }] })
       });
       if (!r.ok) throw new Error('HTTP ' + r.status);
       const j = await r.json();
       const txt = ((j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || '').trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
       try{ o = JSON.parse(txt); }catch(_){ const mm = txt.match(/\{[\s\S]*\}/); if (mm) o = JSON.parse(mm[0]); }
     }
-    if (!o || typeof o.reply !== 'string') throw new Error('返回格式不对');
-    return { ok:o.ok !== false, reply:o.reply.trim() };
-  } finally { clearTimeout(timer); }
+    if (aiFailed){ aiFailed = false; renderRoute(); }
+    return o;
+  }catch(e){
+    aiFailed = true; renderRoute();
+    throw e;
+  }finally{ clearTimeout(timer); }
 }
-async function aiSubmit(raw){
-  const text = (raw || '').trim();
+// 语音识别听小朋友说话常有同音错字（「平果」「是」）：把候选句和这一句该说什么类型的话交给 AI，推断他真正说的话
+async function aiHear(alts, kind){
+  try{
+    const o = await aiJSON('你帮 4 岁半的佑佑纠正语音识别的同音错字。只输出一行 JSON，不要任何解释。',
+      `${kind}\n语音识别听到的候选（可能有同音错字）：${alts.join(' / ')}\n推断佑佑实际说的话，不要替他改成别的意思。只返回：{"heard": "佑佑实际说的话"}`, 0.2);
+    const h = o && typeof o.heard === 'string' ? o.heard.trim() : '';
+    return h && h.length <= 60 ? h : '';
+  }catch(e){ return ''; }
+}
+async function aiChat(text, alts = []){
+  const m = topicMode(), host = hostName();
+  const topic = m.noun;
+  const hist = game.convo.slice(-8).map(c => `${c.role === 'kid' ? '佑佑' : host}：${c.text}`).join('\n');
+  const system = (game.mode.talk ? '你是深圳地铁的「列车长小深」，陪 4 岁半、特别喜欢地铁的佑佑坐地铁、练口语。每到一站，佑佑要说一句话接着当前话题往下聊，说得切题列车才开进这一站。'
+    : '你是「小球」，陪 4 岁半的佑佑玩天空滚球游戏、练口语。每到一站，佑佑要说一句话接着当前话题往下聊，说得切题小球才往前滚。') + '你要：1) 判断佑佑这句话是不是在聊当前话题，或者是在回答你上一句的提问（回答你的问题就算切题，哪怕提到别的东西）；跟之前说过的一模一样的话不算；2) 用一句简单好玩的短话回应，并接着话题再问一个小问题，让他继续说。只输出一行 JSON，不要任何解释。';
+  const prompt = `当前话题：${topic}\n对话历史：\n${hist || '（刚开始）'}\n${host}上一句：${game.aiQ}\n${alts.length ? `语音识别听到的候选（可能有同音错字，先推断佑佑真正想说的话）：${alts.join(' / ')}` : `佑佑刚刚打字说：${text}`}\n\n只返回：{"heard": "佑佑真正说的话", "ok": true或false, "reply": "你对佑佑说的话，25字以内；切题就夸一句再问一个相关的小问题，不切题就温柔地提醒他聊${m.noun}"}`;
+  const o = await aiJSON(system, prompt);
+  if (!o || typeof o.reply !== 'string') throw new Error('返回格式不对');
+  const heard = typeof o.heard === 'string' && o.heard.trim().length <= 60 ? o.heard.trim() : '';
+  return { ok:o.ok !== false, reply:o.reply.trim(), heard };
+}
+async function aiSubmit(raw, alts = []){
+  let text = (raw || '').trim();
   if (!text || game.aiBusy || !game.asking) return;
   $('aiInput').value = '';
-  if (game.pickTopic){ topicAnswer(text); return; }
+  if (game.pickTopic){ topicAnswer(text, alts); return; }
   const m = game.mode, row = game.row, gen = game.gen;
   let r = null, text_shown = false;
   // 第 3 次以后是「一起说」：跟着说出任何一句都算过关，不会一直卡在这一站
   if (m.talk && row && row.together){ const lt = localTalk(row.hint || text); r = { ok:true, together:true, reply:lt.ok ? lt.reply : (topicMode().ask || `你还喜欢什么${topicMode().noun}呀？`) }; }
-  else if (m.seq && !m.talk) r = seqTalk(row, text);   // 顺序模式：游戏自己判对错，不问 AI
+  else if (m.seq && !m.talk){
+    r = seqTalk(row, text);   // 顺序模式：游戏自己判对错
+    // 本地没对上，可能是语音识别听错了字（「四」听成「是」）：请 AI 按这一题该说的类型再听一次（不告诉它答案）
+    if (!r.ok && alts.length && aiReady()){
+      const tries = row.tries;
+      game.aiBusy = true; setAiInput(false); aiNote(`${hostName()}再仔细听一听…`, '');
+      const fixed = await aiHear(alts, seqKind(row));
+      game.aiBusy = false;
+      if (gen !== game.gen || game.state !== 'play' || !game.asking) return;
+      if (fixed && fixed !== text){ row.tries = tries - 1; text = fixed; r = seqTalk(row, text); }
+    }
+  }
   else {
     game.aiBusy = true; setAiInput(false);
-    chatAdd('me', text); text_shown = true;
+    const bubble = chatAdd('me', text); text_shown = true;
     aiNote(`${hostName()}正在输入…`, '');
-    if (aiReady()){ try{ r = await aiChat(text); }catch(e){ r = null; } }
+    if (aiReady()){ try{ r = await aiChat(text, alts); }catch(e){ r = null; } }
+    // AI 纠正了听错的字：气泡里换成他真正说的话，后面的判断也用这句
+    if (r && r.heard && r.heard !== text){ text = r.heard; if (bubble) bubble.textContent = text; }
     if (!r) r = localTalk(text);
     game.aiBusy = false;
     // 等 AI 的时候换了模式 / 重开了一局：这个回答作废，不能串到新的一局里
@@ -1316,11 +1378,19 @@ $('aiMic').hidden = !micReady;
 let stopMic = () => {};
 if (micReady){
   const rec = new SR();
-  rec.lang = 'zh-CN'; rec.interimResults = true; rec.continuous = true; rec.maxAlternatives = 1;
+  rec.lang = 'zh-CN'; rec.interimResults = true; rec.continuous = true; rec.maxAlternatives = 5;   // 多个候选交给 AI 挑
   const btn = $('aiMic');
   const SILENCE = 1400, NOTHING = 8000, MAX_T = 20000;   // 说完停 1.4 秒就发送；8 秒没出声就停；最长 20 秒
   let active = false, listening = false, finalText = '', interim = '', t0 = 0, lastT = 0, tick = null;
+  let finalAlts = [], interimAlts = [];   // 每一段话的候选，第一个是最可能的
   const heard = () => (finalText + interim).trim();
+  // 整句候选：最可能的一句，加上把某一段换成它的其他候选
+  const candidates = () => {
+    const segs = [...finalAlts, ...interimAlts].filter(a => a.length);
+    const out = [segs.map(a => a[0]).join('')];
+    segs.forEach((alts, k) => alts.slice(1).forEach(alt => out.push(segs.map((a, j) => j === k ? alt : a[0]).join(''))));
+    return [...new Set(out.map(x => x.trim()).filter(Boolean))].slice(0, 6);
+  };
   const finish = () => {
     clearInterval(tick); active = false;
     if (listening){ try{ rec.abort(); }catch(e){} }
@@ -1328,7 +1398,7 @@ if (micReady){
     setAiInput(!!game.inputOn);   // 按钮恢复成「点一下 说话」或者等待的字
   };
   stopMic = () => { if (active) finish(); };
-  const deliver = () => { if (!active) return; const t = heard(); finish(); if (!t){ aiNote('没听到，点一下再说一次吧～'); return; } aiSubmit(t); };
+  const deliver = () => { if (!active) return; const t = heard(); finish(); if (!t){ aiNote('没听到，点一下再说一次吧～'); return; } aiSubmit(t, candidates()); };
   const startRec = () => { try{ rec.start(); }catch(e){ setTimeout(() => { if (!active) return; try{ rec.start(); }catch(_){ finish(); aiNote('麦克风启动失败，再点一下试试'); } }, 300); } };
   const check = () => {
     const now = Date.now();
@@ -1340,7 +1410,7 @@ if (micReady){
     if (active){ if (heard()) deliver(); else finish(); return; }   // 正在听：再点一下就发送（还没说就取消）
     if (btn.disabled) return;
     stopSpeech();
-    active = true; finalText = ''; interim = ''; t0 = lastT = Date.now();
+    active = true; finalText = ''; interim = ''; finalAlts = []; interimAlts = []; t0 = lastT = Date.now();
     btn.classList.add('on'); btn.textContent = '🔴 我在听…说完点一下'; $('aiInput').value = '';
     startRec(); tick = setInterval(check, 200);
   });
@@ -1348,8 +1418,11 @@ if (micReady){
   rec.onstart = () => { listening = true; if (!active){ try{ rec.abort(); }catch(e){} } };
   rec.onresult = e => {
     if (!active) return;
-    let tmp = '';
-    for (let i = (e.resultIndex || 0); i < e.results.length; i++){ const r = e.results[i], t = (r[0] && r[0].transcript) || ''; if (r.isFinal) finalText += t; else tmp += t; }
+    let tmp = ''; interimAlts = [];
+    for (let i = (e.resultIndex || 0); i < e.results.length; i++){
+      const r = e.results[i], t = (r[0] && r[0].transcript) || '', alts = Array.from(r, a => a.transcript || '').filter(Boolean);
+      if (r.isFinal){ finalText += t; finalAlts.push(alts); } else { tmp += t; interimAlts.push(alts); }
+    }
     interim = tmp; lastT = Date.now(); $('aiInput').value = heard();
     if (heard()) aiNote(`🎤 ${heard()}`, '');   // 边说边显示听到的字
   };
@@ -1360,7 +1433,7 @@ if (micReady){
     aiNote(err === 'not-allowed' || err === 'service-not-allowed' ? '麦克风权限没打开，在浏览器里允许一下' : err === 'network' ? '语音识别要联网，检查一下网络' : '语音识别没成功，点一下再说一次吧');
   };
   // iPad 的 Safari 说完一句就会自己停，还在听的话接着开
-  rec.onend = () => { listening = false; if (!active) return; finalText += interim; interim = ''; startRec(); };
+  rec.onend = () => { listening = false; if (!active) return; finalText += interim; interim = ''; finalAlts.push(...interimAlts); interimAlts = []; startRec(); };
 }
 
 /* ============================ 碰撞结果 ============================ */
@@ -1384,8 +1457,8 @@ function resolveRow(row){
     sfxGood();
     if (m.ball === 'mouse') game.eat = { emoji:it.emoji, from:p ? { x:p.x, y:p.y } : null, t0:performance.now(), bites:0 };
     // AI 模式里小球刚在对话里说过了，撞上时只放音效（不然会排在下一个问题后面，或者把问题盖住）
-    if (!talkMode()){ if (m.ball === 'mouse') speak(`${it.label}！嗷呜，好吃～`); else sayItem(it); }
-    if (p) { if (m.id === 'alpha' && p.w) sandBurst(p, it.col, 280); else burst(p.x, p.y, it.col, 30); }
+    if (!talkMode()){ if (m.ball === 'mouse') speak(`${it.label}！嗷呜，好吃～`); else if (m.id === 'cookie') speak(`${it.label}！咔嚓咔嚓，香香脆脆～`); else sayItem(it); }
+    if (p && m.ball !== 'mouse') launch(it, p);   // 小老鼠模式里蔬菜被吃掉，其他模式撞飞
     if (m.id === 'metro') metroArrive(it);
     else toast(game.got.length >= GOAL ? '撞齐 10 个啦！冲向终点 🏁' : it.q ? `${it.q}=${it.label}！对啦` : `${it.emoji || it.pic || ''} ${it.label}${it.py ? ' ' + it.py : ''}！对啦`);
     if (it.q && !talkMode() && game.got.length < GOAL){ const nx = game.seq[game.got.length]; speak(`下一题，${nx.a}加${nx.b}等于几？`, true); }
@@ -1394,7 +1467,6 @@ function resolveRow(row){
     speed += 80;
   } else {
     it.state = 'bad';
-    if (m.id === 'alpha' && p && p.w) sandBurst({ x:p.x, y:p.y + p.h * 0.3, w:p.w * 0.6, h:p.h * 0.3 }, it.col, 35);
     if (m.ball === 'mouse') game.yuck = performance.now();
     game.misses++;
     if (ball.inv <= 0){ game.hearts--; ball.inv = 1; }
@@ -1543,7 +1615,7 @@ const trackY = z => { const s = segAt(z), p = (((z % trackLen) + trackLen) % tra
 /* ============================ 画面 ============================ */
 const cv = $('cv'), ctx = cv.getContext('2d');
 let W = 0, H = 0, DPR = 1, yH = 0, yF = 0, xF = 0, sky = null, camY = CAMH, camH = CAMH, pitch = 0, yView = 0;
-let particles = [];
+let particles = [], flyers = [];   // flyers：被撞飞的东西
 const itemScreen = new Map();
 
 function resize(){
@@ -1940,6 +2012,16 @@ function render(now, dt = 0){
     ctx.save(); ctx.translate(q.x, q.y); ctx.rotate(q.r); ctx.fillStyle = q.c; ctx.fillRect(-q.s / 2, -q.s / 4, q.s, q.s / 2); ctx.restore();
   }
   ctx.globalAlpha = 1;
+  // 撞飞的东西（重力 2.2 倍屏高 / 秒²），飞的时候稍微变大一点，像飞向镜头
+  for (let i = flyers.length - 1; i >= 0; i--){
+    const f = flyers[i];
+    if (!game.paused) f.t += pdt;
+    const x = f.gx + f.vx * f.t, gy = f.gy + f.vy * f.t + 1.1 * H * f.t * f.t, cy = gy - f.r * 1.3;
+    if (cy - f.r * 2 > H || f.t > 3){ flyers.splice(i, 1); itemScreen.delete(f.it); continue; }
+    ctx.save(); ctx.translate(x, cy); ctx.rotate(f.vr * f.t); ctx.translate(-x, -cy);
+    drawItem(f.it, x, gy, f.r * (1 + Math.min(f.t, 0.35)), 1, now);
+    ctx.restore();
+  }
   if (zNow === 'lotus' || petals.length) drawPetals(dt, zNow === 'lotus');
   drawWeather(dt);
 }
@@ -2502,6 +2584,7 @@ function drawBallAt(p1, p2, pct, now){
   else if (kind === 'mouse') drawMouseBall(bx, by, rr, ball.phase, now);
   else if (kind === 'melon') drawMelon(bx, by, rr, ball.phase);
   else if (kind === 'hedgehog') drawHedgehog(bx, by, rr, ball.phase);
+  else if (kind === 'cookie') drawCookieBall(bx, by, rr, ball.phase);
   else if (kind === 'train') drawTrain(bx, by, rr, ball.phase, now);
   else if (kind === 'metro') drawMetroCar(bx, by, rr, ball.phase, now);
   else drawBall(bx, by, rr, ball.phase, ball.x * 0.6);
@@ -2768,6 +2851,21 @@ function drawMelon(x, y, r, phase){
   shade(x, y, r, 0.8); ctx.restore();
 }
 
+// 饼干模式：一块滚动的大巧克力曲奇，巧克力豆跟着球面转
+function drawCookieBall(x, y, r, phase){
+  const g = ctx.createRadialGradient(x - r * .3, y - r * .3, r * .1, x, y, r);
+  g.addColorStop(0, '#F2C27B'); g.addColorStop(1, '#B9772F');
+  clipBall(x, y, r, g);
+  FIB.forEach((p, k) => {
+    if (k % 3) return;
+    const q = spherePt(p, phase, x, y, r);
+    if (q.z <= 0.05) return;
+    ctx.fillStyle = k % 2 ? '#4A2A12' : '#6B3E1D';
+    ctx.beginPath(); ctx.ellipse(q.x, q.y, r * 0.13, r * 0.13 * (0.4 + 0.6 * q.z), 0, 0, Math.PI * 2); ctx.fill();
+  });
+  shade(x, y, r, 0.7); ctx.restore();
+}
+
 // 动物模式：缩成一团的小刺猬，滚的时候小脸会转出来
 function drawHedgehog(x, y, r, phase){
   // 外圈的刺
@@ -2910,15 +3008,13 @@ function drawSandItem(it, x, groundY, r, a, age, shakeX){
   const w0 = ctx.measureText(txt).width;
   if (w0 > r * 2.45){ F *= r * 2.45 / w0; ctx.font = `900 ${Math.round(F)}px "Arial Rounded MT Bold","Arial Black",system-ui,sans-serif`; }
   const w = ctx.measureText(txt).width, h = F * 0.72;
-  let sy = 1;   // 撞对了：沙字从下往上塌掉
-  if (it.state === 'got') sy = Math.max(0, 1 - age * 2.5);
   const X = x + shakeX;
   // 影子
-  ctx.globalAlpha = a * 0.45; ctx.fillStyle = 'rgba(30,20,60,.35)';
-  ctx.beginPath(); ctx.ellipse(X, groundY - r * 0.02, w * 0.55, r * 0.22, 0, 0, Math.PI * 2); ctx.fill();
-  if (sy <= 0.02) return { x:X, y:groundY - h / 2, w, h };
+  if (!it.flying){
+    ctx.globalAlpha = a * 0.45; ctx.fillStyle = 'rgba(30,20,60,.35)';
+    ctx.beginPath(); ctx.ellipse(X, groundY - r * 0.02, w * 0.55, r * 0.22, 0, 0, Math.PI * 2); ctx.fill();
+  }
   ctx.save();
-  ctx.translate(X, groundY); ctx.scale(1, sy); ctx.translate(-X, -groundY);
   ctx.globalAlpha = a; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
   // 厚度：往远处（屏幕上方、朝中间）叠几层深色
   const depth = F * 0.12, steps = Math.max(2, Math.min(8, Math.round(depth / 1.5)));
@@ -2935,12 +3031,11 @@ function drawSandItem(it, x, groundY, r, a, age, shakeX){
   return { x:X, y:groundY - h / 2, w, h };
 }
 // 撞碎：沙粒从整个字的范围里喷出来、往下掉
-function sandBurst(box, color, n){
-  const cols = [color, mixHex(color, '#FFFFFF', .4), mixHex(color, '#000000', .25), mixHex(color, '#FFFFFF', .75)];
-  for (let i = 0; i < n; i++){
-    const px = box.x + (Math.random() - .5) * box.w, py = box.y + (Math.random() - .5) * box.h;
-    particles.push({ x:px, y:py, vx:(px - box.x) * 2.6 + (Math.random() - .5) * 320, vy:-80 - Math.random() * 340, life:0.9 + Math.random() * 0.6, c:cols[i % cols.length], s:2.5 + Math.random() * 4.5, r:0 });
-  }
+// 撞对的东西被撞飞：往远离小球的一边翻着跟头飞起来，再掉出画面，不碎
+function launch(it, p){
+  const dir = Math.sign(p.x - ballScreen.x) || (Math.random() < 0.5 ? -1 : 1);
+  flyers.push({ it:{ ...it, state:'idle', flying:true }, gx:p.gx, gy:p.gy, r:p.r, t:0,
+    vx:dir * (0.25 + Math.random() * 0.2) * W, vy:-(1.1 + Math.random() * 0.25) * H, vr:dir * (5 + Math.random() * 4) });
 }
 
 function drawItem(it, x, groundY, r, alpha, now){
@@ -2948,30 +3043,33 @@ function drawItem(it, x, groundY, r, alpha, now){
   if (game.mode && game.mode.id === 'alpha'){
     const age = (now - it.t) / 1000;
     let a = alpha, shakeX = 0;
-    if (it.state === 'got' && age > 0.6) return;
+    if (it.state === 'got') return;
     if (it.state === 'fade'){ if (age > 0.6) return; a *= 1 - age / 0.6; }
     if (it.state === 'bad') shakeX = Math.sin(age * 40) * r * 0.18 * Math.max(0, 1 - age * 2);
     const box = drawSandItem(it, x, groundY, r, a, age, shakeX);
-    itemScreen.set(it, box);
+    itemScreen.set(it, { ...box, gx:x, gy:groundY, r });
     return;
   }
   const age = (now - it.t) / 1000;
   let a = alpha, scale = 1, shakeX = 0;
-  if (it.state === 'got'){ if (age > 0.5) return; scale = 1 + age * 2.2; a *= 1 - age * 2; }
-  else if (it.state === 'fade'){ if (age > 0.6) return; a *= 1 - age / 0.6; }
+  if (it.state === 'got') return;
+  if (it.state === 'fade'){ if (age > 0.6) return; a *= 1 - age / 0.6; }
   else if (it.state === 'bad'){ shakeX = Math.sin(age * 40) * r * 0.18 * Math.max(0, 1 - age * 2); }
   const bob = Math.sin(now / 300 + it.lane * 3) * r * 0.12;
   const cy = groundY - r * 1.3 - bob;
-  ctx.globalAlpha = a * 0.5;
-  ctx.fillStyle = 'rgba(30,20,60,.35)';
-  ctx.beginPath(); ctx.ellipse(x, groundY - r * 0.05, r * 0.75, r * 0.22, 0, 0, Math.PI * 2); ctx.fill();
+  if (!it.flying){
+    ctx.globalAlpha = a * 0.5;
+    ctx.fillStyle = 'rgba(30,20,60,.35)';
+    ctx.beginPath(); ctx.ellipse(x, groundY - r * 0.05, r * 0.75, r * 0.22, 0, 0, Math.PI * 2); ctx.fill();
+  }
   ctx.globalAlpha = a;
   const R = r * scale, X = x + shakeX;
   ctx.fillStyle = it.state === 'bad' ? '#E5E7EB' : '#FFFFFF';
   ctx.beginPath(); ctx.arc(X, cy, R, 0, Math.PI * 2); ctx.fill();
   ctx.strokeStyle = it.state === 'bad' ? '#9CA3AF' : it.col; ctx.lineWidth = Math.max(1.5, R * 0.14); ctx.stroke();
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  if (it.emoji){ ctx.font = `${Math.round(R * 1.15)}px "Apple Color Emoji","Segoe UI Emoji",sans-serif`; ctx.fillStyle = '#000'; ctx.fillText(it.emoji, X, cy + R * 0.06); }
+  if (it.cookie) drawCookie(it.cookie, X, cy, R * 0.8);
+  else if (it.emoji){ ctx.font = `${Math.round(R * 1.15)}px "Apple Color Emoji","Segoe UI Emoji",sans-serif`; ctx.fillStyle = '#000'; ctx.fillText(it.emoji, X, cy + R * 0.06); }
   else { ctx.font = it.cat === '汉字' ? `700 ${Math.round(R * 1.15)}px "Kaiti SC","STKaiti","KaiTi",serif` : `900 ${Math.round(R * (it.label.length > 2 ? Math.min(0.95, 2.6 / it.label.length) : it.label.length > 1 ? 0.95 : 1.2))}px system-ui,-apple-system,sans-serif`; ctx.fillStyle = it.state === 'bad' ? '#6B7280' : it.col; ctx.fillText(it.label, X, cy + R * 0.06); }
   if (it.state === 'bad' && age < 1.2){ ctx.font = `900 ${Math.round(R * 1.4)}px system-ui,sans-serif`; ctx.fillStyle = '#EF4444'; ctx.fillText('✗', X, cy); }
   if (it.emoji && R > 20){
@@ -2985,7 +3083,62 @@ function drawItem(it, x, groundY, r, alpha, now){
     ctx.fillStyle = '#334155'; ctx.fillText(it.label, X, ly + fs * 0.78);
   }
   ctx.globalAlpha = 1;
-  itemScreen.set(it, { x:X, y:cy });
+  itemScreen.set(it, { x:X, y:cy, gx:x, gy:groundY, r });
+}
+
+// 画在圆牌上的饼干，(x, y) 是中心，s 是半径
+function drawCookie(type, x, y, s){
+  const DOUGH = '#E0A458', EDGE = '#A86B2D', CHOC = '#4A2A12';
+  ctx.save(); ctx.translate(x, y); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  const fillEdge = (fill, w = s * 0.08) => { ctx.fillStyle = fill; ctx.fill(); ctx.strokeStyle = EDGE; ctx.lineWidth = w; ctx.stroke(); };
+  const dots = (pts, r, col) => { ctx.fillStyle = col; for (const [px, py] of pts){ ctx.beginPath(); ctx.arc(px * s, py * s, r * s, 0, Math.PI * 2); ctx.fill(); } };
+  const circle = (cx, cy, r) => { ctx.beginPath(); ctx.arc(cx * s, cy * s, r * s, 0, Math.PI * 2); };
+  const starPath = (R, r) => { ctx.beginPath(); for (let i = 0; i < 10; i++){ const a = -Math.PI / 2 + i * Math.PI / 5, q = (i % 2 ? r : R) * s; ctx.lineTo(Math.cos(a) * q, Math.sin(a) * q); } ctx.closePath(); };
+  const heartPath = k => { ctx.beginPath(); ctx.moveTo(0, 0.85 * s * k); ctx.bezierCurveTo(-1.25 * s * k, 0, -0.65 * s * k, -1.05 * s * k, 0, -0.38 * s * k); ctx.bezierCurveTo(0.65 * s * k, -1.05 * s * k, 1.25 * s * k, 0, 0, 0.85 * s * k); ctx.closePath(); };
+  if (type === 'chip' || type === 'jam'){
+    ctx.beginPath();
+    for (let i = 0; i <= 24; i++){ const a = i / 24 * Math.PI * 2, q = s * (0.92 + 0.06 * Math.sin(i * 2.3)); ctx.lineTo(Math.cos(a) * q, Math.sin(a) * q); }
+    ctx.closePath(); fillEdge(DOUGH);
+    if (type === 'chip') dots([[-0.4, -0.3], [0.25, -0.45], [0.45, 0.15], [-0.08, 0.08], [-0.45, 0.35], [0.15, 0.5]], 0.13, CHOC);
+    else { circle(0, 0, 0.42); ctx.fillStyle = '#D7263D'; ctx.fill(); dots([[-0.14, -0.14]], 0.09, 'rgba(255,255,255,.55)'); }
+  } else if (type === 'sandwich'){
+    circle(0, 0.08, 0.92); ctx.fillStyle = '#FFFDF7'; ctx.fill(); ctx.strokeStyle = '#2B1B12'; ctx.lineWidth = s * 0.06; ctx.stroke();   // 白色夹心从下沿露出来
+    circle(0, -0.06, 0.88); ctx.fillStyle = '#2B1B12'; ctx.fill();
+    circle(0, -0.06, 0.58); ctx.strokeStyle = '#5A3D2E'; ctx.lineWidth = s * 0.07; ctx.stroke();
+    dots(Array.from({ length:12 }, (_, i) => [Math.cos(i * Math.PI / 6) * 0.74, -0.06 + Math.sin(i * Math.PI / 6) * 0.74]), 0.05, '#5A3D2E');
+  } else if (type === 'bear'){
+    for (const ex of [-0.58, 0.58]){ circle(ex, -0.55, 0.3); fillEdge(DOUGH); }
+    circle(0, 0.06, 0.8); fillEdge(DOUGH);
+    ctx.beginPath(); ctx.ellipse(0, s * 0.3, s * 0.36, s * 0.26, 0, 0, Math.PI * 2); ctx.fillStyle = '#F3CB8E'; ctx.fill();
+    dots([[-0.3, -0.1], [0.3, -0.1]], 0.09, CHOC); dots([[0, 0.22]], 0.1, CHOC);
+  } else if (type === 'ginger'){
+    const limbs = () => { ctx.beginPath(); ctx.moveTo(-0.68 * s, -0.12 * s); ctx.lineTo(0.68 * s, -0.12 * s); ctx.moveTo(0, -0.3 * s); ctx.lineTo(0, 0.3 * s); ctx.lineTo(-0.42 * s, 0.82 * s); ctx.moveTo(0, 0.3 * s); ctx.lineTo(0.42 * s, 0.82 * s); };
+    limbs(); ctx.strokeStyle = EDGE; ctx.lineWidth = s * 0.46; ctx.stroke();
+    limbs(); ctx.strokeStyle = '#C8813F'; ctx.lineWidth = s * 0.34; ctx.stroke();
+    circle(0, -0.56, 0.34); fillEdge('#C8813F');
+    dots([[-0.12, -0.62], [0.12, -0.62]], 0.055, '#fff');
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = s * 0.06;
+    ctx.beginPath(); ctx.arc(0, -0.56 * s, s * 0.16, 0.3, Math.PI - 0.3); ctx.stroke();
+    for (const ex of [-0.6, 0.6]){ ctx.beginPath(); ctx.moveTo(ex * s, -0.24 * s); ctx.lineTo(ex * s, 0); ctx.stroke(); }
+    dots([[0, -0.08]], 0.08, '#EF4444'); dots([[0, 0.14]], 0.08, '#22C55E');
+  } else if (type === 'heart'){
+    heartPath(1); fillEdge(DOUGH);
+    heartPath(0.72); ctx.fillStyle = '#F9A8D4'; ctx.fill();
+    dots([[-0.3, -0.2], [0.25, -0.25], [0, 0.15], [-0.1, -0.05], [0.3, 0.02]], 0.05, '#fff');
+  } else if (type === 'star'){
+    starPath(1, 0.48); fillEdge(DOUGH);
+    starPath(0.7, 0.34); ctx.fillStyle = '#FDE68A'; ctx.fill();
+    dots([[0, -0.3], [-0.2, 0.1], [0.2, 0.1], [0, 0.05]], 0.05, '#fff');
+  } else if (type === 'finger'){
+    ctx.rotate(-0.55);
+    ctx.beginPath(); ctx.roundRect(-0.95 * s, -0.3 * s, 1.9 * s, 0.6 * s, 0.3 * s); fillEdge('#EBC07A');
+    dots([[-0.6, -0.08], [-0.3, 0.1], [0, -0.1], [0.3, 0.08], [0.6, -0.06]], 0.05, '#fff');
+  } else if (type === 'cracker'){
+    ctx.beginPath(); ctx.roundRect(-0.78 * s, -0.78 * s, 1.56 * s, 1.56 * s, 0.14 * s); fillEdge('#F3D9A4');
+    const holes = []; for (const hx of [-0.42, 0, 0.42]) for (const hy of [-0.42, 0, 0.42]) holes.push([hx, hy]);
+    dots(holes, 0.06, '#C9A15E');
+  }
+  ctx.restore();
 }
 
 function drawFinish(x, y, w, s, a){
