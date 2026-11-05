@@ -575,6 +575,10 @@ function setBalance(n) {
   el.textContent = n;
 }
 
+// Collapsed task groups, remembered on this device.
+const COLLAPSE_KEY = "star-hero-collapsed";
+const collapsedGroups = new Set(JSON.parse(localStorage.getItem(COLLAPSE_KEY) || "[]"));
+
 function renderTasks(done) {
   const count = (id) => done.filter((d) => d === id).length;
   const ul = $("#taskList");
@@ -583,31 +587,52 @@ function renderTasks(done) {
     ul.innerHTML = `<li class="empty">还没有任务哦，请爸爸妈妈在「家长」里添加～</li>`;
     return;
   }
-  for (const task of state.tasks) {
-    const n = count(task.id);
-    const li = document.createElement("li");
-    li.className = "task-item";
-    const btn = document.createElement("button");
-    btn.className = "task" + (n ? " done" : "");
-    btn.innerHTML = `
-      <span class="task-icon"></span>
-      <span class="task-name"></span>
-      <span class="task-pts">+${task.points} ⭐</span>
-      <span class="task-check">${n > 1 ? `×${n}` : "✓"}</span>`;
-    setVisual(btn.querySelector(".task-icon"), task);
-    btn.querySelector(".task-name").textContent = task.name;
-    btn.addEventListener("click", () => startTask(task));
-    li.append(btn);
-    if (n) {
-      const undo = document.createElement("button");
-      undo.className = "task-undo";
-      undo.textContent = "撤销";
-      undo.title = "撤销最近一次";
-      undo.addEventListener("click", () => undoTask(task));
-      li.append(undo);
-    }
-    ul.append(li);
+  for (const group of TASK_GROUPS) {
+    const tasks = state.tasks.filter((t) => groupOf(t) === group.key);
+    if (!tasks.length) continue;
+    const doneN = tasks.filter((t) => count(t.id)).length;
+    const closed = collapsedGroups.has(group.key);
+    const head = document.createElement("li");
+    head.className = "task-group" + (doneN === tasks.length ? " all-done" : "");
+    head.innerHTML = `
+      <button class="task-group-btn" aria-expanded="${!closed}">
+        <span class="tg-name"></span><span class="tg-count">${doneN}/${tasks.length}</span><span class="tg-arrow">${closed ? "▸" : "▾"}</span>
+      </button>`;
+    head.querySelector(".tg-name").textContent = group.label;
+    head.querySelector("button").addEventListener("click", () => {
+      if (closed) collapsedGroups.delete(group.key);
+      else collapsedGroups.add(group.key);
+      localStorage.setItem(COLLAPSE_KEY, JSON.stringify([...collapsedGroups]));
+      renderTasks(doneToday());
+    });
+    ul.append(head);
+    if (!closed) for (const task of tasks) ul.append(taskItem(task, count(task.id)));
   }
+}
+
+function taskItem(task, n) {
+  const li = document.createElement("li");
+  li.className = "task-item";
+  const btn = document.createElement("button");
+  btn.className = "task" + (n ? " done" : "");
+  btn.innerHTML = `
+    <span class="task-icon"></span>
+    <span class="task-name"></span>
+    <span class="task-pts">+${task.points} ⭐</span>
+    <span class="task-check">${n > 1 ? `×${n}` : "✓"}</span>`;
+  setVisual(btn.querySelector(".task-icon"), task);
+  btn.querySelector(".task-name").textContent = task.name;
+  btn.addEventListener("click", () => startTask(task));
+  li.append(btn);
+  if (n) {
+    const undo = document.createElement("button");
+    undo.className = "task-undo";
+    undo.textContent = "撤销";
+    undo.title = "撤销最近一次";
+    undo.addEventListener("click", () => undoTask(task));
+    li.append(undo);
+  }
+  return li;
 }
 
 // Rewards sit on wooden shelves, three per shelf, each with a hanging price tag.
@@ -1008,25 +1033,35 @@ function openItemEditor(kind, item = null) {
   f.num.value = item?.[k.numKey] ?? k.num;
   f.num.max = k.max;
   $("#itemNumLabel").textContent = k.numLabel;
-  f.querySelector(".task-only").classList.toggle("hidden", kind !== "task");
+  f.querySelectorAll(".task-only").forEach((el) => el.classList.toggle("hidden", kind !== "task"));
+  updateAnimOptions(); // build the options before choosing among them
   f.anim.value = item?.anim || "";
-  updateAnimOptions();
+  f.group.value = item?.group || "";
+  updateAnimOptions(); // the "auto" group follows the chosen animation
   $("#itemEditTitle").textContent = `${editingItemId ? "编辑" : "添加"}${k.word}`; // suggestions arrive as unsaved items
   updateItemPreview();
   openEditor("#itemEditor");
 }
 
-// The "auto" option names the animation the current task name would get.
+// The "auto" options name the animation the current task name would get, and the group that
+// animation (or the chosen one) puts the task in.
 function updateAnimOptions() {
   const f = $("#itemEditForm");
   const chosen = f.anim.value;
-  const auto = themeFor({ name: f.name.value.trim() });
+  const name = f.name.value.trim();
+  const auto = themeFor({ name });
   f.anim.innerHTML = [
     ["", `自动（${auto ? THEMES[auto].label : "红包"}）`],
     ...Object.entries(THEMES).map(([k, t]) => [k, t.label]),
     ["envelope", "红包"],
   ].map(([v, label]) => `<option value="${v}">${label}</option>`).join("");
   f.anim.value = chosen;
+
+  const chosenGroup = f.group.value;
+  const autoLabel = TASK_GROUPS.find((g) => g.key === autoGroup({ name, anim: chosen })).label;
+  f.group.innerHTML = [["", `自动（${autoLabel}）`], ...TASK_GROUPS.map((g) => [g.key, g.label])]
+    .map(([v, label]) => `<option value="${v}">${label}</option>`).join("");
+  f.group.value = chosenGroup;
 }
 
 function updateItemPreview() {
@@ -1081,6 +1116,7 @@ function bindEditors() {
   const f = $("#itemEditForm");
   f.icon.addEventListener("input", updateItemPreview);
   f.name.addEventListener("input", updateAnimOptions);
+  f.anim.addEventListener("change", updateAnimOptions);
   $("#animPreview").addEventListener("click", () =>
     celebrate({ name: f.name.value.trim(), anim: f.anim.value, points: clampInt(f.num.value, 1, 99) }),
   );
@@ -1121,6 +1157,8 @@ function bindEditors() {
       const saved = item || list[list.length - 1]; // the task just added
       if (f.anim.value) saved.anim = f.anim.value;
       else delete saved.anim; // automatic: follows the task name
+      if (f.group.value) saved.group = f.group.value;
+      else delete saved.group; // automatic: follows the animation
     }
     closeEditors();
     save();
@@ -1506,7 +1544,9 @@ const THEMES = {
     play: ({ cx, cy, size }) => spawnBubbles(cx, cy + size * 0.05) },
   wash: { label: "洗手", words: ["洗手", "洗脸"], motion: "shake", praise: ["小手洗得香喷喷！", "细菌都跑光啦！", "洗手小卫士！"],
     play: ({ cx, cy, size }) => { spawnBubbles(cx, cy + size * 0.2, 22); spawnFountain(cx, cy, ["💧", "💦", "🧼", "✨"], 14); } },
-  bath: { label: "洗澡洗头", words: ["洗澡", "洗头", "泡澡", "沐浴"], motion: "wiggle", praise: ["洗得香香的！", "泡泡澡真好玩！", "干干净净小宝贝！"],
+  hair: { label: "洗头", words: ["洗头", "洗发"], motion: "nod", praise: ["头发洗得香香的！", "不怕水，真勇敢！", "洗头小勇士！"],
+    play: ({ cx, cy, size }) => { spawnBubbles(cx, cy - size * 0.2, 24); spawnFountain(cx, cy, ["💧", "💦", "🫧", "🧴"], 12); } },
+  bath: { label: "洗澡", words: ["洗澡", "泡澡", "沐浴"], motion: "wiggle", praise: ["洗得香香的！", "泡泡澡真好玩！", "干干净净小宝贝！"],
     play: ({ cx, cy, size }) => { spawnBubbles(cx, cy - size * 0.1, 36); spawnFountain(cx, cy, ["🦆", "🫧", "💧", "🧴"], 10); } },
   potty: { label: "拉臭臭", words: ["大便", "拉臭臭", "便便", "上厕所", "如厕", "小便", "尿尿"], motion: "pop", praise: ["拉臭臭真棒！", "肚子舒服啦！", "自己上厕所真能干！"],
     play: ({ cx, cy }) => { spawnFountain(cx, cy, ["💩", "🧻", "👍", "⭐", "✨", "🌟"], 24); spawnTwinkles(["✨", "🌟"], 16); } },
@@ -1520,12 +1560,19 @@ const THEMES = {
     play: ({ cx, cy }) => { spawnFloaters(cx, cy, ["🪁", "🪁", "🎈", "🦋", "🌸", "☁️"]); spawnTwinkles(["🌼", "✨"], 12); } },
   outdoor: { label: "户外玩耍", words: ["户外", "晒太阳", "散步", "滑梯", "浇水", "浇花"], motion: "dance", praise: ["晒晒太阳长得高！", "户外真好玩！", "大自然真美！"],
     play: ({ cx, cy }) => { spawnFloaters(cx, cy, ["🦋", "🌸", "🍃", "🐦", "🌼", "🦋"]); spawnTwinkles(["☀️", "✨", "🌈"], 12); } },
+  lookfar: { label: "看远处", words: ["看外面", "外面", "远处", "远眺", "望远", "护眼"], motion: "breathe", praise: ["眼睛休息好啦！", "看得好远好远！", "眼睛亮晶晶！"],
+    play: () => spawnTwinkles(["✨", "🌤️", "🍃"], 14) },
   sleep: { label: "睡觉", words: ["睡"], motion: "breathe", praise: ["早睡早起身体好！", "做个甜甜的梦！"],
     play: ({ cx, cy, size }) => { spawnZzz(cx + size * 0.25, cy - size * 0.25); spawnTwinkles(["⭐", "✨", "🌟"], 30); } },
   class: { label: "上课举手", words: ["上课", "课堂", "听课", "兴趣班"], motion: "dance", praise: ["上课真认真！", "积极举手真勇敢！", "又学会新本领啦！"],
     play: ({ cx, cy }) => { spawnFountain(cx, cy, ["🙋", "✋", "💡", "👍", "⭐", "📚", "🔔"], 24); spawnTwinkles(["💡", "✨"], 14); } },
   math: { label: "学数学", words: ["数学", "算术", "口算", "数数", "加法", "减法"], motion: "pop", praise: ["数学小天才！", "算得又快又对！", "数字真好玩！"],
     play: ({ cx, cy }) => spawnFountain(cx, cy, [["1", "#e53935"], ["2", "#f9a825"], ["3", "#1e88e5"], ["5", "#fb8c00"], ["10", "#8e24aa"], ["+", "#43a047"], ["=", "#e53935"], "🧮", "⭐"], 28) },
+  // Before art: "动画片" contains "画".
+  cartoon: { label: "看动画片", words: ["动画片", "动画", "看电视", "电视"], motion: "tilt", praise: ["动画片真好看！", "看完啦，眼睛休息一下～", "哈哈真好笑！"],
+    play: ({ cx, cy }) => { spawnFloaters(cx, cy, ["🍿", "⭐", "🌈", "😆", "📺", "🍿"]); spawnTwinkles(["✨"], 10); } },
+  tetris: { label: "俄罗斯方块", words: ["俄罗斯方块", "方块"], motion: "nod", praise: ["消除一整行！", "方块小高手！", "反应真快！"],
+    play: ({ cx, cy }) => spawnFountain(cx, cy, ["🟥", "🟨", "🟩", "🟦", "🟪", "⭐"], 24) },
   art: { label: "画画手工", words: ["画", "涂色", "手工", "剪纸", "折纸", "彩泥"], motion: "tilt", praise: ["小画家真棒！", "画得真漂亮！", "颜色好丰富！"],
     play: ({ cx, cy }) => spawnFountain(cx, cy, ["🎨", "🖍️", "🖌️", "🌈", "☀️", "⭐"], 24) },
   guzheng: { label: "弹古筝", words: ["古筝", "琵琶", "钢琴", "弹琴", "练琴", "乐器"], motion: "nod", praise: ["琴声真好听！", "小小演奏家！", "弹得真棒！"],
@@ -1560,8 +1607,408 @@ const THEMES = {
     play: ({ cx, cy }) => { fireworks(3, { spread: 220, sound: false }); spawnFountain(cx, cy, ["🏆", "🏅", "💪", "🚩", "⭐", "🌟"], 24); } },
 };
 
+/* Moving parts drawn over (front) or under (back) an illustration, in its 440×440 pixel coordinates,
+   animated with SVG SMIL so they also run on iOS. Illustrations with a back layer have those parts
+   erased to transparency (bike spokes, the jump rope) so the moving version shows instead. */
+const spin = (dur) => `<animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="${dur}" repeatCount="indefinite"/>`;
+const once = (attr, values, begin, dur, extra = "") =>
+  `<animate attributeName="${attr}" values="${values}" begin="${begin}s" dur="${dur}s" fill="freeze" ${extra}/>`;
+
+const bikeWheel = (cx, cy) => `
+  <g transform="translate(${cx} ${cy})">
+    <circle r="42" fill="#eef2f6" stroke="#aab4be" stroke-width="4"/>
+    <g>${[0, 45, 90, 135].map((a) => `<line x1="-40" x2="40" transform="rotate(${a})" stroke="#9aa5b1" stroke-width="3"/>`).join("")}
+      <circle cy="-30" r="5" fill="#ff7043" stroke="#333" stroke-width="1.5"/>${spin("0.45s")}</g>
+    <circle r="8" fill="#c7cdd3" stroke="#3a3a3a" stroke-width="2.5"/>
+  </g>`;
+
+// The jump rope swings from hand to hand: over the head, down in front, under the feet (while the
+// kid is at the top of the hop), and back up behind (fainter).
+const ropeD = (cy) => `M94 188 Q229 ${cy} 364 214`;
+const ropeAnim = `
+  <animate attributeName="d" dur="0.9s" repeatCount="indefinite" calcMode="spline" keyTimes="0;0.25;0.5;0.75;1"
+    keySplines="0.5 0 1 1;0 0 0.5 1;0.5 0 1 1;0 0 0.5 1" values="${[-170, 260, 700, 260, -170].map(ropeD).join(";")}"/>
+  <animate attributeName="stroke-opacity" dur="0.9s" repeatCount="indefinite" values="1;1;0.3;0.3;1" keyTimes="0;0.45;0.55;0.95;1"/>`;
+
+// A stone drops onto the board from above, bounces once, and a gold ripple spreads out ("啪").
+const goStone = (x, y, color, begin) => `
+  <g transform="translate(${x} ${y})">
+    <ellipse rx="5" ry="3" fill="none" stroke="#ffb703" stroke-width="5" opacity="0">
+      ${once("rx", "5;40", begin + 0.25, 0.6)}${once("ry", "3;24", begin + 0.25, 0.6)}${once("opacity", "1;0", begin + 0.25, 0.6)}
+    </ellipse>
+    <g visibility="hidden"><set attributeName="visibility" to="visible" begin="${begin}s"/>
+      <ellipse rx="12" ry="8.5" fill="${color}" stroke="#222" stroke-width="2.5"/>
+      <ellipse cx="-4" cy="-3" rx="4" ry="2.2" fill="#fff" opacity="${color === "#fff" ? 0 : 0.4}"/>
+      <animateTransform attributeName="transform" type="translate" values="0 -80;0 0;0 -10;0 0" keyTimes="0;0.6;0.8;1" begin="${begin}s" dur="0.4s" fill="freeze"/>
+    </g>
+  </g>`;
+
+const drop = (begin) => `
+  <ellipse cx="383" rx="3.5" ry="5" fill="#5bb8f5" opacity="0">
+    <animate attributeName="cy" values="296;336" begin="${begin}s" dur="0.32s" repeatCount="3"/>
+    <animate attributeName="opacity" values="1;1;0" keyTimes="0;0.8;1" begin="${begin}s" dur="0.32s" repeatCount="3"/>
+  </ellipse>`;
+
+const tetrisBlock = (col, row, color) =>
+  `<rect x="${314 + col * 24}" y="${168 + row * 24}" width="22" height="22" rx="4" fill="${color}" stroke="#1b1f3b" stroke-width="2"/>`;
+const fall = (begin, dur, from = -230) =>
+  `<animateTransform attributeName="transform" type="translate" values="0 ${from};0 0;0 -6;0 0" keyTimes="0;0.8;0.9;1" begin="${begin}s" dur="${dur}s" fill="freeze"/>`;
+
+const bird = (y, begin, dur) => `
+  <g transform="translate(-30 ${y})">
+    <path d="M-12 0 Q-6 -8 0 0 Q6 -8 12 0" fill="none" stroke="#4a3b2a" stroke-width="3" stroke-linecap="round">
+      <animate attributeName="d" values="M-12 0 Q-6 -8 0 0 Q6 -8 12 0;M-12 -4 Q-6 4 0 0 Q6 4 12 -4;M-12 0 Q-6 -8 0 0 Q6 -8 12 0" dur="0.35s" repeatCount="indefinite"/>
+    </path>
+    <animateTransform attributeName="transform" type="translate" values="40 ${y + 20};420 ${y - 10}" begin="${begin}s" dur="${dur}s" repeatCount="indefinite"/>
+  </g>`;
+
+// An emoji drawn in a rig, centered on (x, y).
+const emo = (ch, x, y, size) => `<text x="${x}" y="${y}" font-size="${size}" text-anchor="middle" dominant-baseline="central">${ch}</text>`;
+// Shows `inner` (drawn around the origin) at (x, y) and `size`, popping in with an overshoot at `begin`.
+const popIn = (inner, x, y, begin, size = 1) => `
+  <g transform="translate(${x} ${y}) scale(${size})"><g transform="scale(0)">${inner}
+    <animateTransform attributeName="transform" type="scale" values="0;1.35;1" keyTimes="0;0.6;1" begin="${begin}s" dur="0.35s" fill="freeze"/>
+  </g></g>`;
+// Gentle endless bobbing for something that has popped in.
+const bob = (inner, dy = 5, dur = 0.8) =>
+  `<g>${inner}<animateTransform attributeName="transform" type="translate" values="0 0;0 -${dy};0 0" dur="${dur}s" repeatCount="indefinite"/></g>`;
+const pulseR = (x, y, r, begin, dur = 0.9, fill = "#fff", stroke = "#9ecbe8") =>
+  `<circle cx="${x}" cy="${y}" r="0" fill="${fill}" stroke="${stroke}" stroke-width="2"><animate attributeName="r" values="0;${r};${r};0" keyTimes="0;0.3;0.8;1" dur="${dur}s" begin="${begin}s" repeatCount="indefinite"/></circle>`;
+// Something flying along `path` once at `begin`, hidden before and after.
+const flyOnce = (inner, path, begin, dur) => `
+  <g visibility="hidden"><set attributeName="visibility" to="visible" begin="${begin}s"/><set attributeName="visibility" to="hidden" begin="${begin + dur}s"/>
+    ${inner}<animateMotion path="${path}" begin="${begin}s" dur="${dur}s" fill="freeze"/></g>`;
+const flagWave = (a, b, c) =>
+  `<animate attributeName="d" values="${a};${b};${a};${c};${a}" dur="0.8s" repeatCount="indefinite"/>`;
+// Points along the kindergarten bunting string (a quadratic curve).
+const bunting = (t) => [(1 - t) ** 2 * 10 + 2 * (1 - t) * t * 280 + t ** 2 * 550, (1 - t) ** 2 * 20 + 2 * (1 - t) * t * 70 + t ** 2 * 20];
+
+const RIGS = {
+  // Foam bubbles froth at the mouth while scrub lines flash by the brush.
+  brush: {
+    front: `${[[208, 244, 7], [222, 238, 6], [232, 250, 8], [216, 258, 6], [240, 240, 5], [200, 256, 5], [228, 264, 5]].map(([x, y, r], i) => pulseR(x, y, r, i * 0.12)).join("")}
+      <g fill="none" stroke="#5bb8f5" stroke-width="3" stroke-linecap="round"><path d="M128 230 q-8 -8 0 -16"/><path d="M116 236 q-10 -12 0 -24"/>
+        <animate attributeName="opacity" values="1;0.15;1" dur="0.3s" repeatCount="indefinite"/></g>`,
+  },
+  // Water pours from the big cup onto the hair, splashes, and drips off; shampoo bubbles float up.
+  hair: {
+    front: `${[["#7cc8f8", 15, 0.8], ["#fff", 4, 0.9]].map(([color, w, op], i) => `
+      <path d="M218 80 Q228 92 231 116" fill="none" stroke="${color}" stroke-width="${w}" stroke-linecap="round" opacity="${op}" ${i ? 'stroke-dasharray="5 9"' : ""}>
+        ${i ? '<animate attributeName="stroke-dashoffset" values="28;0" dur="0.3s" repeatCount="indefinite"/>' : '<animate attributeName="stroke-width" values="15;19;15" dur="0.25s" repeatCount="indefinite"/>'}</path>`).join("")}
+      ${[["M231 114 q-18 -16 -34 2", 0], ["M231 114 q16 -18 34 0", 0.15], ["M231 114 q-8 -22 -20 -8", 0.3], ["M231 114 q10 -20 22 -6", 0.45]].map(([d, b]) =>
+        `<circle r="5" fill="#7cc8f8" stroke="#fff" stroke-width="1"><animateMotion path="${d}" begin="${b}s" dur="0.5s" repeatCount="indefinite"/></circle>`).join("")}
+      ${[[146, 180, 0.2], [342, 176, 0.5], [160, 210, 0.8], [330, 214, 1.1], [150, 196, 1.4]].map(([x, y, b]) => `
+        <path d="M0 -7 Q6 2 0 5 Q-6 2 0 -7Z" fill="#7cc8f8" stroke="#3a8fd0" stroke-width="1.2" transform="translate(${x} ${y})" opacity="0">
+          <animateTransform attributeName="transform" type="translate" values="${x} ${y};${x} ${y + 70}" begin="${b}s" dur="0.8s" repeatCount="indefinite"/>
+          <animate attributeName="opacity" values="1;1;0" begin="${b}s" dur="0.8s" repeatCount="indefinite"/></path>`).join("")}
+      ${[[200, 110], [270, 104], [300, 128]].map(([x, y], i) => `<circle cx="${x}" cy="${y}" r="6" fill="none" stroke="#9ecbe8" stroke-width="2">
+        <animate attributeName="cy" values="${y};${y - 80}" dur="1.1s" begin="${i * 0.35}s" repeatCount="indefinite"/><animate attributeName="opacity" values="1;0" dur="1.1s" begin="${i * 0.35}s" repeatCount="indefinite"/></circle>`).join("")}`,
+  },
+  // Shampoo foam puffs on the head, bubbles float off it, water splashes over the tub rim.
+  bath: {
+    front: `${[[212, 50, 12], [232, 36, 14], [256, 30, 13], [280, 38, 12], [298, 52, 10], [244, 52, 9], [270, 54, 9]].map(([x, y, r], i) =>
+        `<circle cx="${x}" cy="${y}" r="${r}" fill="#fff" stroke="#cfe6f5" stroke-width="2"><animate attributeName="r" values="${r};${r * 1.25};${r}" dur="0.6s" begin="${i * 0.08}s" repeatCount="indefinite"/></circle>`).join("")}
+      ${[230, 255, 285].map((x, i) => `<circle cx="${x}" cy="30" r="5" fill="none" stroke="#9ecbe8" stroke-width="2">
+        <animate attributeName="cy" values="30;-40" dur="1s" begin="${i * 0.3}s" repeatCount="indefinite"/><animate attributeName="opacity" values="1;0" dur="1s" begin="${i * 0.3}s" repeatCount="indefinite"/></circle>`).join("")}
+      ${[["M70 300 q-14 -30 -30 -4", 0], ["M390 300 q16 -30 32 -2", 0.25], ["M90 295 q-6 -34 -20 -8", 0.5]].map(([p, b]) =>
+        `<circle r="4" fill="#7cc8f8"><animateMotion path="${p}" begin="${b}s" dur="0.7s" repeatCount="indefinite"/></circle>`).join("")}`,
+  },
+  // The toilet paper unrolls and flutters; sparkles for a job well done.
+  potty: {
+    front: `<g fill="none" stroke-linecap="round">
+      ${[["#bdbdbd", 15], ["#fff", 11]].map(([color, w]) => `<path d="M372 382 C395 380 405 405 430 400" stroke="${color}" stroke-width="${w}">
+        <animate attributeName="d" values="M372 382 C395 380 405 405 430 400;M372 382 C395 396 412 380 438 392;M372 382 C395 380 405 405 430 400" dur="0.7s" repeatCount="indefinite"/></path>`).join("")}</g>
+      ${popIn(bob(emo("✨", 0, 0, 30)), 80, 70, 0.4)}${popIn(bob(emo("🌟", 0, 0, 28), 6, 0.7), 340, 60, 0.7)}`,
+  },
+  // Speed lines whoosh along the slide and a puff of air at the bottom.
+  outdoor: {
+    front: `${[[40, 196], [22, 232], [62, 166]].map(([x, y], i) => `
+      <g stroke-linecap="round" opacity="0">${[["#4a3b2a", 9], ["#fff", 4]].map(([color, w]) => `<line x1="${x}" y1="${y}" x2="${x + 48}" y2="${y + 36}" stroke="${color}" stroke-width="${w}"/>`).join("")}
+        <animateTransform attributeName="transform" type="translate" from="0 0" to="-36 -27" begin="${i * 0.15}s" dur="0.45s" repeatCount="indefinite"/>
+        <animate attributeName="opacity" values="1;0" begin="${i * 0.15}s" dur="0.45s" repeatCount="indefinite"/></g>`).join("")}
+      <g transform="translate(404 340)">${emo("💨", 0, 0, 52)}<animateTransform attributeName="transform" type="scale" values="0.6;1.3;0.6" dur="0.6s" repeatCount="indefinite" additive="sum"/></g>
+      ${flyOnce(emo("🌸", 0, 0, 22), "M60 400 q20 -80 -10 -160", 0.2, 1.6)}${flyOnce(emo("🌼", 0, 0, 22), "M380 410 q-20 -90 20 -170", 0.6, 1.6)}`,
+  },
+  // A little flag springs up on the mountain top and flaps; an eagle soars past.
+  hike: {
+    front: `<g transform="translate(350 198) scale(2)"><g transform="scale(1 0)">
+        <line y2="-46" stroke="#5a3a1a" stroke-width="3"/>
+        <path fill="#ff5252" stroke="#7a1d14" stroke-width="2" d="M0 -46 Q14 -50 28 -44 L28 -30 Q14 -36 0 -32 Z">
+          ${flagWave("M0 -46 Q14 -50 28 -44 L28 -30 Q14 -36 0 -32 Z", "M0 -46 Q14 -40 28 -48 L28 -34 Q14 -26 0 -32 Z", "M0 -46 Q14 -54 28 -40 L28 -26 Q14 -40 0 -32 Z")}</path>
+        <animateTransform attributeName="transform" type="scale" values="1 0;1 1.2;1 1" keyTimes="0;0.7;1" begin="0.4s" dur="0.35s" fill="freeze"/>
+      </g></g>
+      ${bird(60, 0.2, 2.4)}`,
+  },
+  // Wind swirls blow across the sky and leaves tumble by.
+  park: {
+    front: `${[["M0 44 q40 -30 80 0 t80 0", 0], ["M150 12 q35 -26 70 0 t70 0", 0.4]].map(([d, b]) => `
+      <path d="${d}" fill="none" stroke="#9ad0ff" stroke-width="5" stroke-linecap="round" stroke-dasharray="40 260">
+        <animate attributeName="stroke-dashoffset" values="300;0" begin="${b}s" dur="1.1s" repeatCount="indefinite"/></path>`).join("")}
+      ${flyOnce(emo("🍃", 0, 0, 24), "M-10 120 q120 -60 240 10 t220 -20", 0.1, 1.8)}${flyOnce(emo("🍂", 0, 0, 22), "M-10 230 q100 -50 200 0 t250 -40", 0.7, 1.8)}`,
+  },
+  // Counting sheep hop over a little fence: "1", "2" ...
+  sleep: {
+    front: `<g stroke="#c8a165" stroke-width="6" stroke-linecap="round"><line x1="376" y1="36" x2="376" y2="84"/><line x1="410" y1="36" x2="410" y2="84"/>
+        <line x1="364" y1="50" x2="422" y2="50"/><line x1="364" y1="70" x2="422" y2="70"/></g>
+      <g transform="translate(300 74)"><g transform="translate(0 -10) scale(1.6)">
+        <g fill="#fff" stroke="#8a8a9a" stroke-width="2"><circle cx="-8" cy="-6" r="9"/><circle cx="4" cy="-9" r="10"/><circle cx="12" cy="-3" r="8"/><circle cx="0" cy="0" r="9"/></g>
+        <circle cx="20" cy="-8" r="6" fill="#4a3b2a"/><g stroke="#4a3b2a" stroke-width="3"><line x1="-6" y1="6" x2="-6" y2="14"/><line x1="8" y1="6" x2="8" y2="14"/></g></g>
+        <animateTransform attributeName="transform" type="translate" values="300 74;393 -6;470 74" keyTimes="0;0.5;1" calcMode="spline" keySplines="0.2 0.6 0.4 1;0.6 0 0.8 0.4" dur="1.3s" repeatCount="indefinite"/>
+      </g>
+      ${[["1", 0.5], ["2", 1.8]].map(([n, b]) => `<text x="393" y="-14" text-anchor="middle" font-size="34" font-weight="900" fill="#ffd23f" opacity="0">${n}
+        <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.2;0.7;1" begin="${b}s" dur="0.9s" fill="freeze"/>
+        <animate attributeName="y" values="-20;-44" begin="${b}s" dur="0.9s" fill="freeze"/></text>`).join("")}`,
+  },
+  // A light bulb pops up over the head and switches on (a bright idea!), and the raised hand waves.
+  class: {
+    front: `${popIn(`
+        <g opacity="0">${once("opacity", "0;1", 0.6, 0.1)}<g>${[0, 45, 90, 135, 180, 225, 270, 315].map((a) => `<line y1="-28" y2="-38" transform="rotate(${a})" stroke="#ffb703" stroke-width="4" stroke-linecap="round"/>`).join("")}
+          <animateTransform attributeName="transform" type="scale" values="1;1.15;1" dur="0.5s" repeatCount="indefinite"/></g></g>
+        <path d="M-14 4 a18 18 0 1 1 28 0 q-4 5 -5 10 h-18 q-1 -5 -5 -10z" fill="#e8e8e8" stroke="#4a3b2a" stroke-width="3">${once("fill", "#e8e8e8;#ffe14d", 0.6, 0.1)}</path>
+        <rect x="-9" y="15" width="18" height="9" rx="2" fill="#9aa5b1" stroke="#4a3b2a" stroke-width="2.5"/>`, 350, 52, 0.2, 1.6)}
+      <g fill="none" stroke="#ff9f43" stroke-width="4" stroke-linecap="round"><path d="M50 30 q-10 14 0 28"/><path d="M36 24 q-14 20 0 40"/>
+        <animate attributeName="opacity" values="1;0.1;1" dur="0.5s" repeatCount="indefinite"/></g>`,
+  },
+  // "1 + 2 = 3 ✓" pops up above the head, chip by chip.
+  math: {
+    front: [["1", "#e53935"], ["+", "#43a047"], ["2", "#f9a825"], ["=", "#8e24aa"], ["3", "#1e88e5"], ["✓", "#2ecc71"]].map(([ch, color], i) =>
+      popIn(`<circle r="22" fill="#fff" stroke="${color}" stroke-width="4"/><text text-anchor="middle" dominant-baseline="central" font-size="28" font-weight="900" fill="${color}">${ch}</text>`, 105 + i * 46, -20, 0.3 + i * 0.18)).join(""),
+  },
+  // A heart gets painted on the canvas stroke by stroke, with dabs of paint around it.
+  art: {
+    front: `<path d="M140 250 C116 232 120 208 140 220 C160 208 164 232 140 250 Z" fill="#ff8fab" fill-opacity="0" stroke="#ff4d6d" stroke-width="5" stroke-linejoin="round" stroke-dasharray="130" stroke-dashoffset="130">
+        ${once("stroke-dashoffset", "130;0", 0.3, 0.8)}${once("fill-opacity", "0;1", 1.1, 0.3)}</path>
+      ${[[112, 266, "#ffd23f"], [168, 254, "#54a0ff"], [118, 202, "#2ecc71"], [166, 212, "#a55eea"]].map(([x, y, color], i) => popIn(`<circle r="7" fill="${color}" stroke="#4a3b2a" stroke-width="1.5"/>`, x, y, 0.5 + i * 0.25)).join("")}`,
+  },
+  // Notes hop onto a little music staff above the head.
+  guzheng: {
+    front: `<g stroke="#8d6e4a" stroke-width="2" opacity="0.8">${[-44, -36, -28, -20, -12].map((y) => `<line x1="110" x2="330" y1="${y}" y2="${y}"/>`).join("")}</g>
+      ${[[140, -16, "#e53935"], [180, -28, "#f9a825"], [220, -20, "#43a047"], [260, -36, "#1e88e5"], [300, -24, "#8e24aa"]].map(([x, y, color], i) =>
+        popIn(bob(`<ellipse rx="7" ry="5" transform="rotate(-20)" fill="${color}"/><line x1="6" y1="0" x2="6" y2="-24" stroke="${color}" stroke-width="2.5"/>`, 4, 0.6), x, y, 0.3 + i * 0.2)).join("")}`,
+  },
+  // Sound waves ring out of the microphone while equalizer bars dance in the corner.
+  music: {
+    front: `<g transform="translate(140 256)">${[0, 0.3, 0.6].map((b) => `
+        <path d="M-24 -22 A32 32 0 0 0 -24 22" fill="none" stroke="#ff6b9d" stroke-width="4" stroke-linecap="round" opacity="0">
+          <animate attributeName="opacity" values="0;1;0" begin="${b}s" dur="0.9s" repeatCount="indefinite"/>
+          <animateTransform attributeName="transform" type="scale" values="0.7;1.6" begin="${b}s" dur="0.9s" repeatCount="indefinite"/></path>`).join("")}</g>
+      ${["#ff6b6b", "#ffd23f", "#2ecc71", "#54a0ff", "#a55eea"].map((color, i) => `
+        <rect x="${368 + i * 15}" width="12" rx="3" fill="${color}" stroke="#4a3b2a" stroke-width="1.5" y="400" height="30">
+          <animate attributeName="height" values="${[30, 60, 20, 50, 30].map((h) => (h + i * 7) % 70 + 10).join(";")}" dur="${0.5 + i * 0.07}s" repeatCount="indefinite"/>
+          <animate attributeName="y" values="${[30, 60, 20, 50, 30].map((h) => 430 - ((h + i * 7) % 70 + 10)).join(";")}" dur="${0.5 + i * 0.07}s" repeatCount="indefinite"/></rect>`).join("")}`,
+  },
+  // A game piece hops three squares along the board: +3!
+  boardgame: {
+    front: `<g><g transform="translate(0 -2)">
+        <path d="M-8 0 L8 0 L4 -14 L-4 -14 Z" fill="#a55eea" stroke="#3d1f5c" stroke-width="2"/><circle cy="-19" r="7" fill="#a55eea" stroke="#3d1f5c" stroke-width="2"/></g>
+        <animateMotion path="M110 334 q30 -46 60 0 q30 -46 60 0 q30 -46 60 0" begin="0.3s" dur="1.4s" fill="freeze" calcMode="linear"/></g>
+      ${popIn(`<text text-anchor="middle" dominant-baseline="central" font-size="28" font-weight="900" fill="#e53935" stroke="#fff" stroke-width="1.5">+3</text>`, 290, 280, 1.7)}`,
+  },
+  // Neat handwriting appears on the page, then a red "100" stamp thumps down.
+  homework: {
+    front: `${[["M236 346 q6 -7 12 0 t12 0 t12 0 t12 0 t12 0 t12 0", 0.2], ["M236 360 q6 -7 12 0 t12 0 t12 0 t12 0", 0.8]].map(([d, b]) => `
+      <path d="${d}" fill="none" stroke="#4a4a4a" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="170" stroke-dashoffset="170">${once("stroke-dashoffset", "170;0", b, 0.6)}</path>`).join("")}
+      <g transform="translate(300 330) rotate(-12)"><g transform="scale(0)">
+        <text text-anchor="middle" dominant-baseline="central" font-size="30" font-weight="900" fill="#e53935">100</text>
+        <path d="M-26 16 H26 M-22 22 H22" stroke="#e53935" stroke-width="3"/>
+        <animateTransform attributeName="transform" type="scale" values="2.2;0.9;1" keyTimes="0;0.7;1" begin="1.35s" dur="0.3s" fill="freeze"/>
+      </g></g>`,
+  },
+  // Friends from the story pop up out of the book.
+  read: {
+    front: [["🦕", 96, 0.3, 22], ["🐰", 334, 0.6, 22], ["🦋", 380, 0.9, 120]].map(([ch, x, b, rise]) => `
+      <g transform="translate(${x} 232)"><g visibility="hidden"><set attributeName="visibility" to="visible" begin="${b}s"/>
+        ${bob(emo(ch, 0, 0, 46), 6, 0.7)}
+        <animateTransform attributeName="transform" type="translate" values="0 10;0 -${rise + 12};0 -${rise}" keyTimes="0;0.7;1" begin="${b}s" dur="0.5s" fill="freeze"/>
+      </g></g>`).join(""),
+  },
+  // Toys fly in one after another and drop into the toy box, each with a sparkle.
+  tidy: {
+    front: [["⚽", 0.2], ["🚗", 0.65], ["🧩", 1.1], ["🦖", 1.55]].map(([ch, b], i) =>
+      flyOnce(emo(ch, 0, 0, 30), `M${440 - i * 10} ${70 + i * 12} Q${360 - i * 10} 40 ${300 + i * 12} 290`, b, 0.55) +
+      `<g opacity="0">${emo("✨", 300 + i * 12, 270, 26)}${once("opacity", "0;1;0", b + 0.55, 0.4)}</g>`).join(""),
+  },
+  // A shirt swings on its hanger and a sock hops about.
+  dress: {
+    front: `<g transform="translate(392 12) scale(1.3)"><g>
+        <path d="M0 0 q0 -10 8 -10 q8 0 6 8" fill="none" stroke="#8d5524" stroke-width="3"/>
+        <path d="M0 4 L-30 26 L30 26 Z" fill="none" stroke="#8d5524" stroke-width="3" stroke-linejoin="round"/>
+        ${emo("👕", 0, 50, 44)}
+        <animateTransform attributeName="transform" type="rotate" values="-14;14;-14" dur="1.2s" repeatCount="indefinite"/></g></g>
+      <g transform="translate(34 236)">${bob(emo("🧦", 0, 0, 44), 18, 0.5)}</g>`,
+  },
+  // The flag flaps in the wind (drawn over the illustration's still flag).
+  challenge: {
+    front: `<path fill="#f2463a" stroke="#7a1d14" stroke-width="3" stroke-linejoin="round" d="M330 106 Q372 112 422 146 Q414 178 416 210 Q366 196 314 184 Z">
+      ${flagWave("M330 106 Q372 112 422 146 Q414 178 416 210 Q366 196 314 184 Z", "M330 106 Q370 126 422 140 Q410 178 418 204 Q366 206 314 184 Z", "M330 106 Q376 104 424 150 Q418 176 414 212 Q368 194 314 184 Z")}</path>`,
+  },
+  // A heart, a smile and a star pop into the speech bubbles.
+  chat: {
+    box: "0 0 560 398",
+    front: [["❤️", 190, 40, 0.3], ["😊", 275, 40, 0.65], ["🌟", 352, 58, 1]].map(([ch, x, y, b]) => popIn(bob(emo(ch, 0, 0, 30), 4, 0.7), x, y, b)).join(""),
+  },
+  // A string of party flags sways above the friends.
+  kindergarten: {
+    box: "0 0 560 527",
+    front: `<path d="M10 20 Q280 70 550 20" fill="none" stroke="#8d5524" stroke-width="3"/>
+      ${["#ff6b6b", "#ffd23f", "#2ecc71", "#54a0ff", "#a55eea", "#ff9f43", "#48dbfb", "#ff6b9d"].map((color, i) => {
+        const [x, y] = bunting(0.08 + i * 0.12);
+        return `<g transform="translate(${x} ${y})"><path d="M-13 0 L13 0 L0 26 Z" fill="${color}" stroke="#4a3b2a" stroke-width="1.5">
+          <animateTransform attributeName="transform" type="rotate" values="${i % 2 ? "-10;10;-10" : "10;-10;10"}" dur="0.9s" repeatCount="indefinite"/></path></g>`;
+      }).join("")}`,
+  },
+  bike: {
+    back: bikeWheel(150, 364) + bikeWheel(355, 366),
+    front: `
+      <clipPath id="rigRoad"><rect x="10" y="420" width="420" height="20"/></clipPath>
+      <g clip-path="url(#rigRoad)"><g stroke="#c9b8a0" stroke-width="5" stroke-linecap="round">
+        ${[-60, 60, 180, 300, 420].map((x) => `<line x1="${x}" y1="432" x2="${x + 50}" y2="432"/>`).join("")}
+        <animateTransform attributeName="transform" type="translate" from="0 0" to="-120 0" dur="0.45s" repeatCount="indefinite"/>
+      </g></g>
+      ${[290, 306, 322].map((y, i) => `
+        <line x1="40" y1="${y}" x2="80" y2="${y}" stroke="#54a0ff" stroke-width="4" stroke-linecap="round" opacity="0">
+          <animateTransform attributeName="transform" type="translate" from="0 0" to="-36 0" begin="${i * 0.15}s" dur="0.45s" repeatCount="indefinite"/>
+          <animate attributeName="opacity" values="0.9;0" begin="${i * 0.15}s" dur="0.45s" repeatCount="indefinite"/>
+        </line>`).join("")}`,
+  },
+  sport: {
+    front: `<g fill="none" stroke-linecap="round">
+      <path d="${ropeD(-170)}" stroke="#7a1f1f" stroke-width="10">${ropeAnim}</path>
+      <path d="${ropeD(-170)}" stroke="#e53935" stroke-width="6">${ropeAnim}</path></g>`,
+  },
+  // The ball rolls back and forth between the two goals (the drawn ball is covered with field green).
+  foosball: {
+    front: `
+      <ellipse cx="233" cy="311" rx="9" ry="8" fill="#42a83a"/>
+      <g>
+        <g><circle r="7.5" fill="#fff" stroke="#222" stroke-width="2"/><circle cx="2.5" cy="-1" r="2.6" fill="#222"/>${spin("0.4s")}</g>
+        <animateMotion path="M180 333 L247 284" keyPoints="0;1;0" keyTimes="0;0.5;1" calcMode="spline" keySplines="0.4 0 0.6 1;0.4 0 0.6 1" dur="1.4s" repeatCount="indefinite"/>
+      </g>`,
+  },
+  // New stones click onto the board one after another, each with a ripple.
+  chess: {
+    front: goStone(245, 340, "#fff", 0.35) + goStone(300, 352, "#222", 0.85) + goStone(210, 372, "#fff", 1.35) + goStone(332, 372, "#222", 1.8),
+  },
+  // Running tap water with little splashes in the basin.
+  wash: {
+    front: `<g fill="none" stroke-linecap="round">
+      <path d="M164 343 L167 395" stroke="#d6f0ff" stroke-width="10" opacity="0.85"/>
+      <path d="M164 343 L167 395" stroke="#5bb8f5" stroke-width="4" stroke-dasharray="9 7">
+        <animate attributeName="stroke-dashoffset" from="0" to="-32" dur="0.3s" repeatCount="indefinite"/></path></g>
+      ${[["M167 395 q-12 -22 -24 2", 0], ["M167 395 q10 -26 22 0", 0.2], ["M167 395 q-4 -30 -10 2", 0.4]].map(([path, begin]) => `
+        <circle r="3" fill="#7cc8f8"><animateMotion path="${path}" begin="${begin}s" dur="0.6s" repeatCount="indefinite"/></circle>`).join("")}`,
+  },
+  // A droopy little flower gets watered and blooms.
+  drink: {
+    front: `<g transform="translate(400 432) scale(1.35) translate(-400 -432)">
+      <g transform="translate(418 286)"><g>
+        <path d="M-14 -2 L-32 -14" stroke="#1d3d6b" stroke-width="7" stroke-linecap="round"/>
+        <path d="M-14 -2 L-32 -14" stroke="#54a0ff" stroke-width="3.5" stroke-linecap="round"/>
+        <path d="M6 -12 q12 -12 16 4" fill="none" stroke="#1d3d6b" stroke-width="4"/>
+        <rect x="-14" y="-12" width="28" height="22" rx="5" fill="#54a0ff" stroke="#1d3d6b" stroke-width="3"/>
+        <animateTransform attributeName="transform" type="rotate" values="0;-35;-35;0" keyTimes="0;0.15;0.7;0.85" dur="1.8s" fill="freeze"/>
+      </g></g>
+      ${drop(0.35)}${drop(0.45)}${drop(0.55)}
+      <path d="M378 392 h46 l-6 38 h-34 z" fill="#e07a4f" stroke="#4a2b1a" stroke-width="3" stroke-linejoin="round"/>
+      <rect x="374" y="384" width="54" height="11" rx="4" fill="#ef8f63" stroke="#4a2b1a" stroke-width="3"/>
+      <path d="M401 385 Q404 345 376 342" fill="none" stroke="#4caf50" stroke-width="5" stroke-linecap="round">
+        ${once("d", "M401 385 Q404 345 376 342;M401 385 Q404 345 376 342;M401 385 Q398 350 401 318", 0, 1.8, 'keyTimes="0;0.55;1" calcMode="spline" keySplines="0 0 1 1;0.3 1.5 0.6 1"')}
+      </path>
+      <g transform="translate(401 368)"><g transform="rotate(50)">
+        <path d="M0 0 q12 -10 22 -2 q-10 10 -22 2z" fill="#66bb6a" stroke="#2e7d32" stroke-width="2"/>
+        <animateTransform attributeName="transform" type="rotate" values="50;50;-15" keyTimes="0;0.55;1" dur="1.8s" fill="freeze"/>
+      </g></g>
+      <g transform="translate(376 342)">
+        <animateTransform attributeName="transform" type="translate" values="376 342;376 342;401 318" keyTimes="0;0.55;1" dur="1.8s" fill="freeze" calcMode="spline" keySplines="0 0 1 1;0.3 1.5 0.6 1"/>
+        <g transform="rotate(80)"><animateTransform attributeName="transform" type="rotate" values="80;80;0" keyTimes="0;0.55;1" dur="1.8s" fill="freeze"/>
+          <g transform="scale(0.6)"><animateTransform attributeName="transform" type="scale" values="0.6;0.6;1.3;1.15" keyTimes="0;0.6;0.85;1" dur="2s" fill="freeze"/>
+            ${[0, 60, 120, 180, 240, 300].map((a) => `<ellipse cy="-12" rx="7" ry="11" transform="rotate(${a})" fill="#b9a7a0" stroke="#7a4a5a" stroke-width="1.5">${once("fill", "#b9a7a0;#b9a7a0;#ff6b9d", 0, 1.7, 'keyTimes="0;0.7;1"')}</ellipse>`).join("")}
+            <circle r="7" fill="#c8b27a" stroke="#7a5a2a" stroke-width="1.5">${once("fill", "#c8b27a;#c8b27a;#ffd23f", 0, 1.7, 'keyTimes="0;0.7;1"')}</circle>
+          </g>
+        </g>
+      </g></g>`,
+  },
+  // A battery charges from red to a full green 100%.
+  eat: {
+    front: `<g transform="translate(396 160)">
+      <rect x="-10" y="-76" width="20" height="10" rx="3" fill="#4a3b2a"/>
+      <rect x="-25" y="-68" width="50" height="130" rx="10" fill="#fff" stroke="#4a3b2a" stroke-width="5"/>
+      <rect x="-18" y="48" width="36" height="8" rx="5" fill="#ee5253">
+        ${once("height", "8;118", 0.2, 1.5)}${once("y", "48;-62", 0.2, 1.5)}${once("fill", "#ee5253;#ffd23f;#2ecc71", 0.2, 1.5)}
+      </rect>
+      <path d="M5 -32 L-11 4 H0 L-5 34 L13 -6 H2 Z" fill="#fff" stroke="#4a3b2a" stroke-width="2.5" stroke-linejoin="round">
+        <animateTransform attributeName="transform" type="scale" values="1;1.2;1" dur="0.5s" repeatCount="indefinite"/>
+      </path>
+      <text y="-86" text-anchor="middle" font-size="24" font-weight="900" fill="#23995a" opacity="0">100%${once("opacity", "0;1", 1.7, 0.2)}</text>
+    </g>
+    <radialGradient id="eatGlow"><stop offset="0" stop-color="#fff59d" stop-opacity="0.95"/><stop offset="1" stop-color="#ffd23f" stop-opacity="0"/></radialGradient>
+    ${["M396 82 C448 60 456 350 418 340", "M396 222 C346 240 346 350 386 340"].map((d) => `
+      <path d="${d}" fill="none" stroke="#4a3b2a" stroke-width="4" stroke-linecap="round"/>
+      <circle r="4" fill="#ffd23f" opacity="0"><animateMotion path="${d}" begin="0.2s" dur="0.6s" repeatCount="indefinite"/>${once("opacity", "0;1", 0.2, 0.1)}</circle>`).join("")}
+    <g transform="translate(402 282) scale(1.3)">
+      <circle r="24" fill="url(#eatGlow)" opacity="0">${once("r", "24;70", 0.2, 1.5)}${once("opacity", "0;1", 0.2, 1.5)}
+        <animate attributeName="r" values="70;82;70" begin="1.7s" dur="0.5s" repeatCount="indefinite"/></circle>
+      <g opacity="0">${once("opacity", "0;1", 1.5, 0.2)}<g>${[0, 45, 90, 135, 180, 225, 270, 315].map((a) => `<line y1="-34" y2="-48" transform="rotate(${a})" stroke="#ffb703" stroke-width="5" stroke-linecap="round"/>`).join("")}
+        <animateTransform attributeName="transform" type="scale" values="1;1.2;1" dur="0.5s" repeatCount="indefinite"/></g></g>
+      <path d="M-22 0 a22 22 0 1 1 44 0 q0 12 -10 20 v8 h-24 v-8 q-10 -8 -10 -20z" fill="#eeeeee" stroke="#4a3b2a" stroke-width="3.5">
+        ${once("fill", "#eeeeee;#fff3b0;#ffe14d;#ffd000", 0.2, 1.5)}</path>
+      <path d="M-8 18 V6 l4 -8 l4 8 l4 -8 l4 8 V18" fill="none" stroke="#9e9e9e" stroke-width="2.5" stroke-linejoin="round">${once("stroke", "#9e9e9e;#ff9800;#e65100", 0.2, 1.5)}</path>
+      <rect x="-13" y="28" width="26" height="14" rx="3" fill="#b0bec5" stroke="#4a3b2a" stroke-width="3"/>
+      <path d="M-13 35 H13" stroke="#4a3b2a" stroke-width="2"/>
+    </g>`,
+  },
+  // Blocks fall into the playfield, the bottom row fills up, flashes and clears.
+  tetris: {
+    front: `
+      <rect x="308" y="160" width="128" height="276" rx="10" fill="#2d3561" stroke="#1b1f3b" stroke-width="4" opacity="0.92"/>
+      <g>${once("opacity", "1;0", 1.3, 0.15)}
+        ${tetrisBlock(0, 10, "#ff6b6b")}${tetrisBlock(1, 10, "#2ecc71")}${tetrisBlock(2, 10, "#54a0ff")}
+        <g transform="translate(0 -230)">${fall(0.2, 0.7)}${tetrisBlock(3, 10, "#ffd23f")}${tetrisBlock(4, 10, "#ffd23f")}</g>
+      </g>
+      <rect x="312" y="406" width="120" height="24" rx="4" fill="#fff" opacity="0">${once("opacity", "0;0.95;0;0.95;0", 0.9, 0.4)}</rect>
+      <g><animateTransform attributeName="transform" type="translate" values="0 0;0 24" begin="1.3s" dur="0.15s" fill="freeze"/>
+        ${tetrisBlock(0, 9, "#a55eea")}
+        <g transform="translate(0 -230)">${fall(0.2, 0.7)}${tetrisBlock(3, 9, "#ffd23f")}${tetrisBlock(4, 9, "#ffd23f")}</g>
+      </g>
+      <g transform="translate(0 -230)">${fall(1.45, 0.5)}${[0, 1, 2, 3].map((c) => tetrisBlock(c, 9, "#48dbfb")).join("")}</g>`,
+  },
+  // The little TV plays a cartoon: a smiley ball bouncing across a changing sky.
+  cartoon: {
+    front: `
+      <clipPath id="rigTv"><rect x="70" y="199" width="114" height="105" rx="12"/></clipPath>
+      <g clip-path="url(#rigTv)">
+        <rect x="60" y="190" width="140" height="120" fill="#8fd3ff">
+          <animate attributeName="fill" values="#8fd3ff;#ffd6e7;#c8f7c5;#8fd3ff" dur="2.4s" repeatCount="indefinite"/></rect>
+        <ellipse cx="127" cy="318" rx="80" ry="26" fill="#7bd389"/>
+        <g fill="#fff" opacity="0.9"><ellipse cx="0" cy="222" rx="14" ry="6"/><ellipse cx="10" cy="218" rx="9" ry="6"/>
+          <animateTransform attributeName="transform" type="translate" values="80 0;200 0" dur="3s" repeatCount="indefinite"/></g>
+        <g><g>
+            <circle r="15" fill="#ffd23f" stroke="#4a3b2a" stroke-width="2.5"/>
+            <circle cx="-5" cy="-3" r="2.2" fill="#4a3b2a"/><circle cx="5" cy="-3" r="2.2" fill="#4a3b2a"/>
+            <path d="M-6 4 Q0 10 6 4" fill="none" stroke="#4a3b2a" stroke-width="2.2" stroke-linecap="round"/>
+            <animateTransform attributeName="transform" type="scale" values="1.15 0.85;0.95 1.05;1.15 0.85" keyTimes="0;0.5;1" dur="0.6s" repeatCount="indefinite"/></g>
+          <animateMotion path="M92 288 Q110 215 127 288 Q145 215 162 288 Q145 215 127 288 Q110 215 92 288" dur="2.4s" repeatCount="indefinite"/>
+        </g>
+      </g>`,
+  },
+  // Through the open window: sky, hills, a drifting cloud and birds flying past.
+  lookfar: {
+    back: `
+      <clipPath id="rigWindow"><rect x="74" y="68" width="306" height="280"/></clipPath>
+      <g clip-path="url(#rigWindow)">
+        <rect x="74" y="68" width="306" height="280" fill="#bfe8ff"/>
+        <g transform="translate(330 112)"><g>${[0, 45, 90, 135, 180, 225, 270, 315].map((a) => `<line y1="-24" y2="-34" transform="rotate(${a})" stroke="#ffb703" stroke-width="4" stroke-linecap="round"/>`).join("")}${spin("6s")}</g>
+          <circle r="18" fill="#ffd23f" stroke="#f4a100" stroke-width="3"/></g>
+        <ellipse cx="140" cy="350" rx="130" ry="70" fill="#9ad27f"/><ellipse cx="320" cy="360" rx="150" ry="80" fill="#7bc46a"/>
+        <g fill="#fff"><ellipse cx="0" cy="130" rx="26" ry="11"/><ellipse cx="16" cy="122" rx="16" ry="11"/>
+          <animateTransform attributeName="transform" type="translate" values="120 0;300 0" dur="6s" repeatCount="indefinite"/></g>
+        ${bird(84, 0, 2.2)}${bird(96, 0.5, 2.6)}${bird(78, 1.1, 2.4)}
+      </g>`,
+  },
+};
+
 // Illustrations are cached for a day; bump this when one is redrawn so devices fetch the new picture.
-const ANIM_VERSION = 2;
+const ANIM_VERSION = 3;
 const animSrc = (key) => `assets/anim/${key}.webp?v=${ANIM_VERSION}`;
 
 // A task's animation: chosen in the editor (task.anim), otherwise matched from its name.
@@ -1571,6 +2018,20 @@ function themeFor(task) {
   return Object.keys(THEMES).find((k) => THEMES[k].words.some((w) => task.name.includes(w))) || null;
 }
 
+// Groups on the kids' task list. A task goes into the group of its animation theme unless parents
+// chose one for it (task.group); tasks with no group theme land in "其他".
+const TASK_GROUPS = [
+  { key: "clean", label: "🧼 洗漱卫生", themes: ["brush", "wash", "hair", "bath", "potty"] },
+  { key: "life", label: "🍚 生活自理", themes: ["eat", "drink", "dress", "sleep", "tidy", "lookfar"] },
+  { key: "kinder", label: "🏫 幼儿园和朋友", themes: ["kindergarten", "class", "chat"] },
+  { key: "study", label: "📚 学习兴趣", themes: ["math", "homework", "read", "art", "guzheng", "music", "chess"] },
+  { key: "sport", label: "🏃 运动户外", themes: ["sport", "bike", "outdoor", "hike", "park"] },
+  { key: "play", label: "🎲 玩耍", themes: ["foosball", "boardgame", "tetris", "cartoon"] },
+  { key: "other", label: "⭐ 其他", themes: [] },
+];
+const autoGroup = (task) => TASK_GROUPS.find((g) => g.themes.includes(themeFor(task)))?.key || "other";
+const groupOf = (task) => (TASK_GROUPS.some((g) => g.key === task.group) ? task.group : autoGroup(task));
+
 function celebrate(task) {
   const key = themeFor(task);
   if (!key) return redEnvelope(task.points, randomCheer());
@@ -1578,21 +2039,33 @@ function celebrate(task) {
   document.querySelectorAll(".rp-overlay, .scene-overlay").forEach((o) => o.remove()); // quick taps: newest only
   const overlay = document.createElement("div");
   overlay.className = `scene-overlay theme-${key}`;
+  const rig = RIGS[key] || {};
+  const layer = (cls, svg) => (svg ? `<svg class="rig ${cls}" viewBox="${rig.box || "0 0 440 440"}" aria-hidden="true">${svg}</svg>` : "");
+  // Shared fun for every theme: spinning sun rays behind the kid, a comic "哇！" sticker, and the
+  // earned stars popping in one by one while the number counts up.
+  const stars = "⭐".repeat(Math.min(task.points, 5));
   overlay.innerHTML = `
     <div class="scene">
-      <img class="scene-kid m-${theme.motion}" alt="" src="${animSrc(key)}" />
-      <div class="scene-label"><small></small><b>+${task.points}<span>⭐</span></b></div>
+      <div class="scene-art m-${theme.motion}">
+        <div class="scene-rays"></div>
+        ${layer("back", rig.back)}<img class="scene-kid" alt="" src="${animSrc(key)}" />${layer("front", rig.front)}
+        <div class="scene-sticker"></div>
+      </div>
+      <div class="scene-label"><small></small><span class="scene-stars">${[...stars].map((s, i) => `<i style="animation-delay:${0.8 + i * 0.12}s">${s}</i>`).join("")}</span><b>+<span class="scene-num">0</span><span>⭐</span></b></div>
     </div>`;
   overlay.querySelector(".scene-label small").textContent = pick(theme.praise);
+  overlay.querySelector(".scene-sticker").textContent = pick(["哇！", "耶！", "棒！", "酷！", "赞！", "好耶！"]);
   document.body.append(overlay);
   playSound(key);
   const kid = overlay.querySelector(".scene-kid");
   const r = kid.getBoundingClientRect(); // centered; the pop-in scale does not move the center
   theme.play({ cx: r.left + r.width / 2, cy: r.top + r.height / 2, size: kid.offsetWidth });
+  const num = overlay.querySelector(".scene-num");
+  for (let i = 1; i <= task.points; i++) setTimeout(() => (num.textContent = i), 750 + (i * 500) / task.points);
   setTimeout(() => playSound("coins"), 850);
-  setTimeout(() => flyStars(overlay.querySelector(".scene-label"), Math.min(task.points, 6)), 1500);
-  setTimeout(() => overlay.classList.add("leave"), 2300);
-  setTimeout(() => overlay.remove(), 2700);
+  setTimeout(() => flyStars(overlay.querySelector(".scene-label"), Math.min(task.points, 6)), 1700);
+  setTimeout(() => overlay.classList.add("leave"), 2700);
+  setTimeout(() => overlay.remove(), 3100);
 }
 
 // Warm the image cache so the first celebration shows its picture immediately.
@@ -1609,7 +2082,8 @@ let noiseBuffer;
 
 function audio() {
   audioCtx ||= new (window.AudioContext || window.webkitAudioContext)();
-  if (audioCtx.state === "suspended") audioCtx.resume();
+  // iOS reports "interrupted" rather than "suspended" after the page was in the background.
+  if (audioCtx.state !== "running") audioCtx.resume().catch(() => {});
   if (!noiseBuffer) {
     noiseBuffer = audioCtx.createBuffer(1, audioCtx.sampleRate * 2, audioCtx.sampleRate);
     const data = noiseBuffer.getChannelData(0);
@@ -1740,6 +2214,12 @@ const SOUNDS = {
     noise(t, 1, { vol: 0.12, filter: "bandpass", freq: 1500, q: 0.7, attack: 0.1 });
     [1568, 1760, 2093, 2637].forEach((f, i) => tone(f, t + 1 + i * 0.06, 0.22, { type: "sine", vol: 0.1 }));
   },
+  // "哗——" water pours from the cup, bubbles bloop up, then a clean sparkle.
+  hair(t) {
+    noise(t, 0.9, { vol: 0.22, filter: "bandpass", freq: 800, freqTo: 2400, q: 0.6, attack: 0.08 });
+    [0.95, 1.1, 1.22].forEach((d, i) => tone(500 + i * 180, t + d, 0.1, { type: "sine", vol: 0.14, slideTo: 1200 + i * 200 }));
+    [1568, 2093, 2637].forEach((f, i) => tone(f, t + 1.4 + i * 0.07, 0.25, { type: "sine", vol: 0.09 }));
+  },
   // A splash, then the rubber duck squeaks twice.
   bath(t) {
     noise(t, 0.45, { vol: 0.3, filter: "lowpass", freq: 2500, freqTo: 400 });
@@ -1780,6 +2260,29 @@ const SOUNDS = {
     syllables(t + 0.6, 3, 300, 400, 0.12); // mom
     syllables(t + 0.95, 3, 150, 220, 0.16); // dad
     for (let i = 0; i < 4; i++) tone(1100 - i * 80, t + 1.35 + i * 0.07, 0.06, { type: "sine", vol: 0.09, slideTo: 1500 - i * 80 });
+  },
+  // A TV "bloop" switching on, a boing-boing cartoon, then a giggle.
+  cartoon(t) {
+    tone(1800, t, 0.12, { type: "sine", vol: 0.08, slideTo: 300 });
+    [0.25, 0.55].forEach((d) => tone(220, t + d, 0.22, { type: "sine", vol: 0.2, slideTo: 700 }));
+    for (let i = 0; i < 4; i++) tone(1200 - i * 90, t + 0.95 + i * 0.08, 0.07, { type: "sine", vol: 0.09, slideTo: 1600 - i * 90 });
+  },
+  // A falling-blocks tune (the folk melody 货郎/Korobeiniki), then the line-clear "pling".
+  tetris(t) {
+    [[659, 0.2], [494, 0.1], [523, 0.1], [587, 0.2], [523, 0.1], [494, 0.1], [440, 0.2]].reduce((d, [f, len]) => {
+      tone(f, t + d, len * 0.9, { type: "square", vol: 0.06 });
+      return d + len;
+    }, 0);
+    [1319, 1760, 2637].forEach((f, i) => tone(f, t + 1.05 + i * 0.05, 0.25, { type: "sine", vol: 0.1 }));
+  },
+  // Birdsong and a soft breeze while the eyes rest.
+  lookfar(t) {
+    noise(t, 1.4, { vol: 0.05, filter: "bandpass", freq: 500, freqTo: 900, q: 0.8, attack: 0.5 });
+    [0.1, 0.3, 0.75, 0.9].forEach((d) => {
+      const f = rand(2800, 3600);
+      tone(f, t + d, 0.09, { type: "sine", vol: 0.08, slideTo: f * 1.25 });
+      tone(f * 1.1, t + d + 0.1, 0.07, { type: "sine", vol: 0.06, slideTo: f * 0.9 });
+    });
   },
   // Two brush swishes, then a colorful "ta-da" glissando.
   art(t) {
@@ -1869,6 +2372,21 @@ const SOUNDS = {
     tone(180, t + 0.12, 0.25, { type: "square", vol: 0.1 });
   },
 };
+
+// Phones stop the page's audio when it goes to the background or the screen locks, and iOS may never
+// resume that context. So drop a stopped context when the page comes back, and start audio again on
+// the next tap, so that sounds played later from timers (cart drop, coins, fireworks) are heard too.
+function dropStoppedAudio() {
+  if (document.visibilityState !== "visible" || !audioCtx || audioCtx.state === "running") return;
+  audioCtx.close().catch(() => {});
+  audioCtx = null;
+  noiseBuffer = null;
+}
+document.addEventListener("visibilitychange", dropStoppedAudio);
+addEventListener("pageshow", dropStoppedAudio);
+for (const type of ["pointerup", "touchend", "keydown"]) {
+  addEventListener(type, () => soundOn && audioCtx?.state !== "running" && audio(), { capture: true, passive: true });
+}
 
 function playSound(kind) {
   if (!soundOn) return;

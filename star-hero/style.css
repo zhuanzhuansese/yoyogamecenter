@@ -168,6 +168,28 @@ input { font: inherit; color: inherit; }
 .task.done .task-name { color: #23995a; }
 .task.done .task-check { border-color: var(--green); background: var(--green); color: #fff; font-size: 15px; font-weight: 900; animation: pop 0.35s; }
 .task-item { position: relative; }
+/* Group headers on the task list; tap to fold a group away. */
+.task-group { margin: 14px 0 8px; }
+.task-group:first-child { margin-top: 4px; }
+.task-group-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 14px;
+  background: #fff1dc;
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 800;
+  text-align: left;
+}
+.tg-name { flex: 1; }
+.tg-count { padding: 2px 10px; border-radius: 999px; background: #fff; color: var(--orange); font-size: 14px; }
+.tg-arrow { width: 16px; color: var(--muted); text-align: center; }
+.task-group.all-done .task-group-btn { background: var(--green-soft); }
+.task-group.all-done .tg-count { background: var(--green); color: #fff; }
 .task-undo {
   position: absolute;
   top: -6px;
@@ -762,8 +784,65 @@ input:focus { border-color: var(--orange); }
 .scene-overlay.leave { opacity: 0; }
 .scene-overlay.theme-sleep { background: radial-gradient(circle at 50% 45%, rgba(40, 60, 120, 0.92) 0 30%, rgba(20, 30, 70, 0.85) 70%); }
 .scene-overlay.theme-sleep::before { content: "🌙"; position: absolute; top: 14%; right: 14%; font-size: 54px; animation: breathe 2s ease-in-out infinite; }
-.scene { display: flex; flex-direction: column; align-items: center; animation: rpPop 0.45s cubic-bezier(0.3, 1.6, 0.6, 1); }
-.scene-kid { width: min(62vw, 240px); height: auto; filter: drop-shadow(0 10px 16px rgba(90, 52, 18, 0.25)); }
+.scene { display: flex; flex-direction: column; align-items: center; animation: jellyIn 0.75s ease-out; }
+/* The kid boings in like jelly, and hops away when the celebration ends. */
+@keyframes jellyIn {
+  0% { opacity: 0; transform: scale(0.2) translateY(40px); }
+  35% { opacity: 1; transform: scale(1.15, 0.85); }
+  55% { transform: scale(0.92, 1.1) translateY(-10px); }
+  75% { transform: scale(1.04, 0.96); }
+  100% { transform: none; }
+}
+.scene-overlay.leave .scene { animation: hopAway 0.4s ease-in forwards; }
+@keyframes hopAway {
+  30% { transform: scale(1.08, 0.9); }
+  100% { opacity: 0; transform: scale(0.4) translateY(-120px) rotate(10deg); }
+}
+/* Sun rays slowly spinning behind the kid. */
+.scene-rays {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 160%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: repeating-conic-gradient(rgba(255, 210, 63, 0.45) 0 9deg, rgba(255, 107, 157, 0.18) 9deg 18deg);
+  -webkit-mask: radial-gradient(circle, #000 25%, transparent 68%);
+  mask: radial-gradient(circle, #000 25%, transparent 68%);
+  transform: translate(-50%, -50%);
+  animation: raysSpin 9s linear infinite, fade 0.6s;
+  pointer-events: none;
+}
+@keyframes raysSpin { to { transform: translate(-50%, -50%) rotate(360deg); } }
+.theme-sleep .scene-rays { opacity: 0.25; }
+/* A comic-style "哇！" burst popping up beside the kid's head. */
+.scene-sticker {
+  position: absolute;
+  z-index: 3;
+  top: 2%;
+  left: -6%;
+  display: grid;
+  place-items: center;
+  width: 74px;
+  height: 74px;
+  background: #ffd23f;
+  clip-path: polygon(50% 0, 61% 18%, 82% 8%, 80% 30%, 100% 36%, 85% 52%, 98% 70%, 76% 72%, 76% 95%, 58% 82%, 44% 100%, 36% 80%, 14% 90%, 18% 68%, 0 58%, 16% 44%, 4% 24%, 26% 24%, 28% 4%, 42% 16%);
+  color: #e53935;
+  font-size: 19px;
+  font-weight: 900;
+  animation: stickerPop 0.5s cubic-bezier(0.3, 1.8, 0.6, 1) 0.35s both, stickerWobble 0.6s ease-in-out 0.85s infinite alternate;
+}
+@keyframes stickerPop { from { transform: scale(0) rotate(-40deg); } to { transform: scale(1) rotate(-12deg); } }
+@keyframes stickerWobble { from { transform: scale(1) rotate(-12deg); } to { transform: scale(1.1) rotate(-4deg); } }
+/* Earned stars pop in one by one above the counting number. */
+.scene-stars { display: flex; gap: 2px; font-size: 20px; line-height: 1.2; }
+.scene-stars i { font-style: normal; animation: starPop 0.35s cubic-bezier(0.3, 1.8, 0.6, 1) both; }
+@keyframes starPop { from { opacity: 0; transform: scale(0) translateY(10px) rotate(-90deg); } }
+.scene-kid { position: relative; z-index: 1; display: block; width: min(62vw, 240px); height: auto; filter: drop-shadow(0 10px 16px rgba(90, 52, 18, 0.25)); }
+/* Moving parts (spinning wheels, the swinging rope, ...) share the illustration's box and motion. */
+.scene-art { position: relative; }
+.scene-art .rig { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.scene-art .rig.front { z-index: 2; }
 .scene-label {
   display: flex;
   flex-direction: column;
@@ -785,7 +864,7 @@ input:focus { border-color: var(--orange); }
 .m-bounce { animation: hop 0.45s cubic-bezier(0.3, 0, 0.6, 1) infinite alternate; }
 .m-nod { animation: nod 0.5s ease-in-out infinite alternate; }
 .m-tilt { animation: tilt 0.9s ease-in-out infinite alternate; }
-.m-pop { animation: pulse 0.5s ease-in-out infinite alternate; }
+.m-pop { animation: jelly 0.9s ease-in-out infinite; }
 .m-shake { animation: shakeX 0.3s ease-in-out infinite alternate; }
 .m-breathe { animation: breathe 1.6s ease-in-out infinite; }
 .m-dance { animation: dance 0.5s ease-in-out infinite alternate; }
@@ -793,12 +872,12 @@ input:focus { border-color: var(--orange); }
 .theme-kindergarten .scene-kid, .theme-chat .scene-kid { width: min(86vw, 330px); }
 @keyframes wiggle { from { transform: rotate(-5deg) translateX(-4px); } to { transform: rotate(5deg) translateX(4px); } }
 @keyframes hop { from { transform: translateY(0) scaleY(0.96); } to { transform: translateY(-36px); } }
-@keyframes nod { from { transform: rotate(-2deg) translateY(0); } to { transform: rotate(2deg) translateY(5px); } }
-@keyframes tilt { from { transform: rotate(-4deg); } to { transform: rotate(4deg); } }
-@keyframes pulse { from { transform: scale(1); } to { transform: scale(1.07); } }
-@keyframes shakeX { from { transform: translateX(-6px) rotate(-1deg); } to { transform: translateX(6px) rotate(1deg); } }
+@keyframes nod { from { transform: rotate(-4deg) translateY(0); } to { transform: rotate(4deg) translateY(8px); } }
+@keyframes tilt { from { transform: rotate(-7deg); } to { transform: rotate(7deg) translateY(-4px); } }
+@keyframes jelly { 0%, 100% { transform: scale(1); } 30% { transform: scale(1.1, 0.92); } 50% { transform: scale(0.94, 1.08) translateY(-6px); } 70% { transform: scale(1.03, 0.98); } }
+@keyframes shakeX { from { transform: translateX(-9px) rotate(-2deg); } to { transform: translateX(9px) rotate(2deg); } }
 @keyframes breathe { 50% { transform: scale(1.04); } }
-@keyframes dance { from { transform: rotate(-3deg) translateY(0); } to { transform: rotate(3deg) translateY(-14px); } }
+@keyframes dance { from { transform: rotate(-5deg) translateY(0); } to { transform: rotate(5deg) translateY(-20px); } }
 @keyframes ride { from { transform: translateX(-18px) rotate(-1deg); } to { transform: translateX(18px) translateY(-4px) rotate(1deg); } }
 
 /* Shop: the reward drops from the shelf into a cart that rolls in above the tab bar. */
